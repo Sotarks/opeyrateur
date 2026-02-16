@@ -14,6 +14,7 @@ def create_expenses_tab(app):
     app.expenses_tab.grid_columnconfigure(0, weight=1)
     app.expenses_tab.grid_rowconfigure(1, weight=1)
 
+    app.expense_to_edit = None # Variable pour stocker les données originales de la dépense en cours de modification
     app.current_proof_path = None # Variable pour stocker le chemin du fichier sélectionné
 
     # --- Formulaire d'ajout ---
@@ -53,9 +54,14 @@ def create_expenses_tab(app):
     app.proof_label.grid(row=3, column=1, columnspan=2, sticky="w", padx=5, pady=5)
     ctk.CTkButton(form_frame, text="Parcourir...", width=100, command=lambda: _select_proof(app)).grid(row=3, column=3, padx=5, pady=5)
 
-    # Bouton Ajouter
+    # Boutons d'action
+    action_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+    action_frame.grid(row=4, column=0, columnspan=4, pady=10, padx=20, sticky="ew")
+    action_frame.grid_columnconfigure((0, 1), weight=1)
+
     app.add_expense_btn = ctk.CTkButton(form_frame, text="Ajouter la dépense", command=lambda: _add_expense(app), font=app.font_button)
-    app.add_expense_btn.grid(row=4, column=0, columnspan=4, pady=10, padx=20, sticky="ew")
+    app.add_expense_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+    app.cancel_edit_expense_btn = ctk.CTkButton(action_frame, text="Annuler", command=lambda: _cancel_edit_expense(app), fg_color="gray50", font=app.font_button)
     app.original_btn_color = app.add_expense_btn.cget("fg_color") # Sauvegarde la couleur par défaut
 
     # --- Liste des frais ---
@@ -77,7 +83,7 @@ def create_expenses_tab(app):
     ctk.CTkButton(button_container, text="Réinitialiser les frais", fg_color="#D32F2F", hover_color="#B71C1C", command=lambda: _reset_expenses(app), font=app.font_button).pack(side="left")
 
     # Treeview pour afficher les données (style tableau)
-    columns = ("date", "cat", "desc", "montant", "proof_status", "proof_path")
+    columns = ("date", "cat", "desc", "montant", "proof_status", "proof_path", "expense_id")
     app.expenses_tree = ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse", displaycolumns=("date", "cat", "desc", "montant", "proof_status"))
     
     app.expenses_tree.heading("date", text="Date", command=lambda: _sort_expenses_by(app, "date"))
@@ -128,14 +134,10 @@ def _add_expense(app):
         }
         
         if save_expense(data):
-            app._show_status_message("Dépense ajoutée avec succès.")
-            app.expense_desc.delete(0, 'end')
-            app.expense_amount.delete(0, 'end')
+            message = "Dépense modifiée avec succès." if app.expense_to_edit else "Dépense ajoutée avec succès."
+            app._show_status_message(message)
             refresh_expenses_list(app)
-            
-            # Réinitialisation du champ preuve
-            app.current_proof_path = None
-            app.proof_label.configure(text="Aucun fichier sélectionné", text_color="gray")
+            _cancel_edit_expense(app) # Réinitialise le formulaire et les boutons
         else:
             messagebox.showerror("Erreur", "Erreur lors de l'enregistrement.")
             
@@ -164,7 +166,8 @@ def refresh_expenses_list(app):
         for _, row in df.iterrows():
             proof_path = row["ProofPath"] if pd.notna(row["ProofPath"]) else ""
             proof_status = "📎" if proof_path else ""
-            app.expenses_tree.insert("", "end", values=(row["Date"], row["Categorie"], row["Description"], f"{row['Montant']:.2f} €", proof_status, proof_path))
+            expense_id = row.get("ExpenseID", "")
+            app.expenses_tree.insert("", "end", values=(row["Date"], row["Categorie"], row["Description"], f"{row['Montant']:.2f} €", proof_status, proof_path, expense_id))
 
 def _generate_pdf_report(app):
     current_year = datetime.now().year
@@ -197,7 +200,7 @@ def _open_proof(app):
     if not selected_item: return
     
     item_values = app.expenses_tree.item(selected_item, "values")
-    proof_path = item_values[5] # Index 5 = proof_path
+    proof_path = item_values[5] if len(item_values) > 5 else None
     
     if proof_path and os.path.exists(proof_path):
         os.startfile(proof_path)
@@ -211,23 +214,22 @@ def _confirm_delete_expense(app):
         return
     
     item_values = app.expenses_tree.item(selected_item, "values")
-    # values: date, cat, desc, montant_str
-    
-    montant_str = item_values[3].replace(' €', '').replace(',', '.')
+    montant_str = item_values[3].replace(' €', '').replace(',', '.') if len(item_values) > 3 else "0.0"
     try:
         montant = float(montant_str)
     except:
         montant = 0.0
-        
+
     data = {
-        "Date": item_values[0],
-        "Categorie": item_values[1],
-        "Description": item_values[2],
-        "Montant": montant
+        "Date": item_values[0] if len(item_values) > 0 else "",
+        "Categorie": item_values[1] if len(item_values) > 1 else "",
+        "Description": item_values[2] if len(item_values) > 2 else "",
+        "Montant": montant,
+        "ExpenseID": item_values[6] if len(item_values) > 6 else None
     }
     
     if messagebox.askyesno("Confirmation", "Voulez-vous vraiment supprimer cette dépense ?"):
-        if delete_expense(data):
+        if delete_expense(data): # On passe tout le dict pour la compatibilité
             refresh_expenses_list(app)
             app._show_status_message("Dépense supprimée.")
         else:
@@ -240,6 +242,7 @@ def _prepare_edit_expense(app):
         return
         
     item_values = app.expenses_tree.item(selected_item, "values")
+    montant_str = item_values[3].replace(' €', '').replace(',', '.') if len(item_values) > 3 else "0.0"
     
     # Remplir le formulaire
     app.expense_date.configure(state="normal")
@@ -252,12 +255,11 @@ def _prepare_edit_expense(app):
     app.expense_desc.delete(0, 'end')
     app.expense_desc.insert(0, item_values[2])
     
-    montant_str = item_values[3].replace(' €', '').replace(',', '.')
     app.expense_amount.delete(0, 'end')
     app.expense_amount.insert(0, montant_str)
     
     # Gestion du justificatif
-    proof_path = item_values[5] # Index 5 = proof_path
+    proof_path = item_values[5] if len(item_values) > 5 else None
     app.current_proof_path = proof_path if proof_path else None
     
     label_text = os.path.basename(proof_path) if proof_path else "Aucun fichier sélectionné"
@@ -265,32 +267,41 @@ def _prepare_edit_expense(app):
 
     # Sauvegarde les données originales pour suppression ultérieure
     app.expense_to_edit = {
-        "Date": item_values[0],
-        "Categorie": item_values[1],
-        "Description": item_values[2],
-        "Montant": float(montant_str)
+        "Date": item_values[0] if len(item_values) > 0 else "",
+        "Categorie": item_values[1] if len(item_values) > 1 else "",
+        "Description": item_values[2] if len(item_values) > 2 else "",
+        "Montant": float(montant_str),
+        "ExpenseID": item_values[6] if len(item_values) > 6 else None
     }
     
     # Change le bouton en mode "Modifier"
     app.add_expense_btn.configure(text="Modifier la dépense", fg_color="#e67e22", command=lambda: _update_expense(app))
+    app.cancel_edit_expense_btn.grid(row=0, column=1, sticky="ew", padx=(5, 0))
 
 def _update_expense(app):
     """Supprime l'ancienne dépense et ajoute la nouvelle."""
-    # On tente d'ajouter la nouvelle dépense (la validation se fait dans _add_expense)
-    # Si on est ici, c'est qu'on veut modifier. On supprime l'ancienne d'abord.
-    if hasattr(app, 'expense_to_edit'):
+    if app.expense_to_edit:
         delete_expense(app.expense_to_edit)
-        del app.expense_to_edit
     
     _add_expense(app)
     
-    # Réinitialise le bouton
+def _cancel_edit_expense(app):
+    """Annule le mode édition et réinitialise le formulaire."""
+    app.expense_to_edit = None
+    app.current_proof_path = None
+
+    # Réinitialise les champs du formulaire
+    app.expense_desc.delete(0, 'end')
+    app.expense_amount.delete(0, 'end')
+    app.expense_date.configure(state="normal")
+    app.expense_date.delete(0, 'end')
+    app.expense_date.insert(0, datetime.now().strftime("%d/%m/%Y"))
+    app.expense_date.configure(state="readonly")
+    app.proof_label.configure(text="Aucun fichier sélectionné", text_color="gray")
+
+    # Réinitialise les boutons
     app.add_expense_btn.configure(text="Ajouter la dépense", fg_color=app.original_btn_color, command=lambda: _add_expense(app))
-    
-    # Réinitialise le champ preuve si on annule ou finit (géré par _add_expense, mais au cas où)
-    if not hasattr(app, 'expense_to_edit'):
-        app.current_proof_path = None
-        app.proof_label.configure(text="Aucun fichier sélectionné", text_color="gray")
+    app.cancel_edit_expense_btn.grid_forget()
 
 def _sort_expenses_by(app, col):
     """Trie le Treeview des dépenses par colonne."""

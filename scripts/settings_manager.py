@@ -1,5 +1,6 @@
 import configparser
 import os
+import json
 from . import config as app_config
 
 CONFIG_FILE = os.path.join(app_config.BASE_DIR, 'settings.ini')
@@ -21,7 +22,15 @@ DEFAULT_SETTINGS = {
         'phone_number': "06.71.58.43.12",
         'email': "",
         'attestation_city': "Carvin",
-        'attestation_message': "Je soussignée, {practitioner_name}, {practitioner_title}, atteste avoir reçu {gender} {patient_name} en rendez-vous pour un suivi psychologique, en date du {consultation_date}."
+        'attestation_message': "Je soussignée, {practitioner_name}, {practitioner_title}, atteste avoir reçu {gender} {patient_name} en rendez-vous pour un suivi psychologique, en date du {consultation_date}.",
+        'prestations': json.dumps({
+            "1ère consultation enfants et adolescents": 75.0,
+            "Consultation de suivi enfants": 55.0,
+            "Consultation de suivi adolescents": 60.0,
+            "Consultation adulte": 60.0,
+            "Consultation familiale": 75.0,
+            "Consultation de couple": 75.0
+        }, indent=4)
     }
 }
 
@@ -83,3 +92,14 @@ def save_pdf_info(data):
         parser.write(configfile)
 
     _invalidate_caches()
+
+def get_prestations():
+    """Récupère la liste des prestations et prix depuis la configuration."""
+    setup_default_settings()
+    parser = _get_parser()
+    try:
+        prestations_str = parser.get('PDFInfo', 'prestations', fallback='{}')
+        return json.loads(prestations_str)
+    except (json.JSONDecodeError, configparser.Error):
+        # En cas d'erreur, retourne le dictionnaire par défaut
+        return json.loads(DEFAULT_SETTINGS['PDFInfo']['prestations'])

@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime
+import time
 import shutil
 import math
 from . import config
@@ -217,6 +218,9 @@ def _get_expenses_excel_path(year):
 def save_expense(data):
     """Enregistre une dépense dans le fichier Excel des frais."""
     try:
+        if 'ExpenseID' not in data or not data['ExpenseID']:
+            data['ExpenseID'] = f"EXP-{int(time.time() * 1000)}"
+
         date_obj = datetime.strptime(data['Date'], '%d/%m/%Y')
         year = date_obj.year
         excel_path = _get_expenses_excel_path(year)
@@ -254,7 +258,7 @@ def save_expense(data):
         data['ProofPath'] = final_proof_path
         
         # Colonnes attendues
-        columns = ["Date", "Categorie", "Description", "Montant", "ProofPath"]
+        columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath"]
         
         os.makedirs(os.path.dirname(excel_path), exist_ok=True)
         if os.path.exists(excel_path):
@@ -280,7 +284,7 @@ def save_expense(data):
 def load_expenses(year):
     """Charge les frais pour une année donnée."""
     excel_path = _get_expenses_excel_path(year)
-    columns = ["Date", "Categorie", "Description", "Montant", "ProofPath"]
+    columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath"]
     if not os.path.exists(excel_path):
         return pd.DataFrame(columns=columns)
     
@@ -288,6 +292,9 @@ def load_expenses(year):
     # S'assure que la colonne ProofPath existe (pour les anciens fichiers)
     if "ProofPath" not in df.columns:
         df["ProofPath"] = None
+    # S'assure que la colonne ExpenseID existe (pour les anciens fichiers)
+    if "ExpenseID" not in df.columns:
+        df["ExpenseID"] = None
     return df
 
 def delete_expense(data):
@@ -300,23 +307,28 @@ def delete_expense(data):
         if not os.path.exists(excel_path):
             return False
             
-        df = pd.read_excel(excel_path)
+        df = pd.read_excel(excel_path, dtype={'ExpenseID': str})
         
         # Recherche de la ligne à supprimer
         idx_to_drop = None
-        for idx, row in df.iterrows():
-            row_date = str(row['Date'])
-            row_cat = str(row['Categorie'])
-            row_desc = str(row['Description'])
-            try:
-                row_amount = float(row['Montant'])
-            except:
-                row_amount = 0.0
-            
-            # Comparaison avec tolérance pour les flottants
-            if (row_date == data['Date'] and row_cat == data['Categorie'] and row_desc == data['Description'] and abs(row_amount - data['Montant']) < 0.01):
-                idx_to_drop = idx
-                break
+
+        # Nouvelle méthode : suppression par ID unique (plus fiable)
+        if 'ExpenseID' in data and data['ExpenseID'] and 'ExpenseID' in df.columns:
+            matches = df.index[df['ExpenseID'] == data['ExpenseID']].tolist()
+            if matches:
+                idx_to_drop = matches[0]
+        
+        # Ancienne méthode (fallback pour les données sans ID)
+        if idx_to_drop is None:
+            for idx, row in df.iterrows():
+                row_date = str(row['Date'])
+                row_cat = str(row['Categorie'])
+                row_desc = str(row['Description'])
+                row_amount = float(row.get('Montant', 0.0))
+                
+                if (row_date == data['Date'] and row_cat == data['Categorie'] and row_desc == data['Description'] and abs(row_amount - data['Montant']) < 0.01):
+                    idx_to_drop = idx
+                    break
         
         if idx_to_drop is not None:
             # Suppression du fichier de preuve associé s'il existe
@@ -327,7 +339,7 @@ def delete_expense(data):
                 except Exception as e:
                     print(f"Erreur suppression fichier preuve: {e}")
 
-            df = df.drop(idx_to_drop)
+            df = df.drop(idx_to_drop).reset_index(drop=True)
             df.to_excel(excel_path, index=False)
             return True
         return False

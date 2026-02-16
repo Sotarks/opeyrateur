@@ -10,6 +10,7 @@ from datetime import datetime
 
 class PDF(FPDF):
     def __init__(self, *args, **kwargs):
+        self.doc_type = kwargs.pop('doc_type', 'invoice') # 'invoice' or 'attestation'
         super().__init__(*args, **kwargs)
         self.alias_nb_pages() # Permet d'utiliser {nb} pour le nombre total de pages
         self.pdf_info = settings_manager.get_pdf_info()
@@ -42,22 +43,22 @@ class PDF(FPDF):
             self.set_x(text_x)
             self.cell(0, 5, email, ln=True, align='L')
 
-        self.ln(1)
-        self.set_x(text_x)
-        self.cell(0, 5, f"Siret : {self.pdf_info.get('siret', '')}", ln=True, align='L')
-        self.set_x(text_x)
-        self.cell(0, 5, f"RPPS : {self.pdf_info.get('rpps', '')}", ln=True, align='L')
+        if self.doc_type != 'attestation':
+            self.ln(1)
+            self.set_x(text_x)
+            self.cell(0, 5, f"Siret : {self.pdf_info.get('siret', '')}", ln=True, align='L')
 
         # --- Ligne de séparation, mention TVA et pagination ---
         self.set_y(-25)
         self.set_font('Arial', 'I', 8)
         self.line(10, self.get_y(), 200, self.get_y())
-        
+
         # Mention TVA sous la ligne
-        self.ln(2) # Petit espace sous la ligne
-        self.set_font('Arial', 'I', 9)
-        self.set_text_color(128)
-        self.cell(0, 5, "TVA non applicable, art. 293 B du CGI", ln=True, align='C')
+        if self.doc_type != 'attestation':
+            self.ln(2) # Petit espace sous la ligne
+            self.set_font('Arial', 'I', 9)
+            self.set_text_color(128)
+            self.cell(0, 5, "TVA non applicable, art. 293 B du CGI", ln=True, align='C')
 
         # Numérotation des pages en bas
         self.set_y(-15)
@@ -203,15 +204,41 @@ def generate_pdf(data, is_duplicate=False):
 
 def generate_attestation_pdf(data):
     """Génère un PDF d'attestation de présence."""
-    pdf = PDF()
+    pdf = PDF(doc_type='attestation')
     pdf_info = pdf.pdf_info
     pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
 
+    # --- En-tête (similaire à la facture) ---
+    logo_path = resource_path(os.path.join("src", "logo.png"))
+    logo_exists = os.path.exists(logo_path)
+    start_x = 60 if logo_exists else 10
+
+    if logo_exists:
+        pdf.image(logo_path, x=10, y=8, w=40)
+    
+    pdf.set_y(15)
+    
+    pdf.set_x(start_x)
+    pdf.set_font("Arial", 'B', 11)
+    pdf.cell(0, 6, pdf_info.get('company_name', ''), ln=True)
+
+    pdf.set_x(start_x)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(0, 5, pdf_info.get('address_line1', ''), ln=True)
+    pdf.set_x(start_x)
+    pdf.cell(0, 5, pdf_info.get('address_line2', ''), ln=True)
+    pdf.ln(2)
+    pdf.set_x(start_x)
+    pdf.cell(0, 5, f"Siret : {pdf_info.get('siret', '')}", ln=True)
+    pdf.set_x(start_x)
+    pdf.cell(0, 5, f"RPPS : {pdf_info.get('rpps', '')}", ln=True)
+
     # Titre
+    pdf.ln(20) # Espace après l'en-tête
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, "Attestation de Présence", ln=True, align='C')
-    pdf.ln(30)
+    pdf.ln(20) # Espace après le titre
 
     # Corps du texte
     pdf.set_font("Arial", '', 12)

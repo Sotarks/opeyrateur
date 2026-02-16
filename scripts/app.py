@@ -8,6 +8,8 @@ import threading
 import queue 
 from tkinter import messagebox, PhotoImage
 import tkinter as tk
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkcalendar import Calendar
 import webbrowser
 import shutil
@@ -15,11 +17,11 @@ import shutil
 # --- Imports des modules séparés ---
 from . import config 
 from . import pin_manager
-from . import settings_manager
+from . import settings_manager 
 from .utils import resource_path
 from .pdf_viewer import PDFViewer
 from .pdf_generator import generate_pdf, generate_attestation_pdf
-from .data_manager import (save_to_excel, get_invoice_path, get_yearly_invoice_count, load_all_data, load_year_data, backup_database, MONTHS_FR, delete_invoice, get_available_years)
+from .data_manager import (save_to_excel, get_invoice_path, get_yearly_invoice_count, load_all_data, load_year_data, backup_database, MONTHS_FR, delete_invoice, get_available_years, load_expenses)
 from .new_invoice_tab import create_new_invoice_tab
 from .search_tab import create_search_tab
 from .budget_tab import create_budget_tab, calculate_budget
@@ -28,36 +30,12 @@ from tkinter import filedialog
 from .attestation_tab import create_attestation_tab
 from .menu import create_menu
 
-class ToolTip:
-    """Classe pour afficher une infobulle au survol d'un widget."""
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tooltip_window = None
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
-
-    def show_tooltip(self, event=None):
-        if self.tooltip_window: return
-        x = self.widget.winfo_rootx() + (self.widget.winfo_width() // 2)
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
-        self.tooltip_window = ctk.CTkToplevel(self.widget)
-        self.tooltip_window.wm_overrideredirect(True)
-        self.tooltip_window.geometry(f"+{x}+{y}")
-        label = ctk.CTkLabel(self.tooltip_window, text=self.text, fg_color="#2B2B2B", text_color="#FFFFFF", corner_radius=6, height=25)
-        label.pack(padx=8, pady=4)
-
-    def hide_tooltip(self, event=None):
-        if self.tooltip_window:
-            self.tooltip_window.destroy()
-            self.tooltip_window = None
-
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
         self.title("Opeyrateur - A. Peyrat")
-        self.geometry("600x850")
+        self.geometry("500x650") # Taille initiale pour la fenêtre de login
 
         # --- Définir l'icône de la fenêtre ---
         try:
@@ -68,15 +46,7 @@ class App(ctk.CTk):
             # Affiche une erreur dans la console si l'icône ne peut pas être chargée, mais ne bloque pas l'app
             print(f"Erreur lors du chargement de l'icône : {e}")
 
-        self.prestations_prix = {
-            "1ère consultation enfants et adolescents": 75.0,
-            "Consultation de suivi enfants": 55.0,
-            "Consultation de suivi adolescents": 60.0,
-            "Consultation adulte": 60.0,
-            "Consultation familiale": 75.0,
-            "Consultation de couple": 75.0
-        }
-        
+        self.prestations_prix = settings_manager.get_prestations()
         # --- Définition des polices ---
         self.font_regular = ctk.CTkFont(family="Montserrat", size=13)
         self.font_bold = ctk.CTkFont(family="Montserrat", size=13, weight="bold")
@@ -94,6 +64,8 @@ class App(ctk.CTk):
         self.is_expenses_tab_initialized = False
         self.is_attestation_tab_initialized = False
 
+        self.dashboard_chart_canvas = None
+        self.dashboard_fig = None
         # --- Caches pour la performance ---
         self.data_cache = {}
         self.regeneration_queue = queue.Queue()
@@ -194,6 +166,8 @@ class App(ctk.CTk):
         if pin_manager.verify_pin(pin):
             self.login_frame.grid_forget()
             self.menu_frame.grid(row=0, column=0, sticky="nsew")
+            self.state('zoomed') # Passe en plein écran (maximisé) après le login
+            self._update_dashboard_kpis()
         else:
             self.pin_entry.delete(0, 'end')
             messagebox.showerror("Erreur", "Code PIN incorrect.")
@@ -694,17 +668,12 @@ class App(ctk.CTk):
         wrapper.grid(row=0, column=0, sticky="nsew")
         
         if wrapper == self.expenses_wrapper:
-            self.geometry("1500x850")
             refresh_expenses_list(self)
         elif wrapper == self.search_wrapper:
-            self.geometry("1200x850")
             # N'affiche rien par défaut pour éviter de charger des milliers de factures.
             self._display_invoices_in_frame(pd.DataFrame(), "Utilisez les filtres pour lancer une recherche")
         elif wrapper == self.budget_wrapper:
-            self.geometry("600x850")
             calculate_budget(self)
-        else:
-            self.geometry("600x850")
 
     def _show_menu(self):
         self.new_invoice_wrapper.grid_forget()
@@ -713,7 +682,158 @@ class App(ctk.CTk):
         self.expenses_wrapper.grid_forget()
         self.attestation_wrapper.grid_forget()
         self.menu_frame.grid(row=0, column=0, sticky="nsew")
-        self.geometry("600x850")
+        self._update_dashboard_kpis()
+
+    def _update_dashboard_kpis(self):
+        """Calcule et met à jour les indicateurs clés et le graphique du tableau de bord."""
+        try:
+            now = datetime.now()
+            self._invalidate_data_cache()
+            invoices_df = self._load_data_with_cache()
+            expenses_df = load_expenses(now.year)
+
+            revenue_month, sessions_month, unpaid_total, expenses_month = 0.0, 0, 0.0, 0.0
+            
+            # --- Chart Data ---
+            chart_labels = []
+            chart_values = []
+
+            if not invoices_df.empty:
+                invoices_df['Date'] = pd.to_datetime(invoices_df['Date'], format='%d/%m/%Y', errors='coerce')
+                paid_invoices_df = invoices_df[invoices_df['Methode_Paiement'] != 'Impayé'].copy()
+                
+                unpaid_df = invoices_df[invoices_df['Methode_Paiement'] == 'Impayé']
+                unpaid_total = unpaid_df['Montant'].sum()
+
+                monthly_invoices = invoices_df[(invoices_df['Date'].dt.year == now.year) & (invoices_df['Date'].dt.month == now.month)]
+                sessions_month = len(monthly_invoices)
+                
+                paid_monthly_invoices = paid_invoices_df[(paid_invoices_df['Date'].dt.year == now.year) & (paid_invoices_df['Date'].dt.month == now.month)]
+                revenue_month = paid_monthly_invoices['Montant'].sum()
+
+                # Calculate last 6 months revenue for chart
+                for i in range(5, -1, -1):
+                    target_date = now - pd.DateOffset(months=i)
+                    month_name = MONTHS_FR[target_date.month - 1][:3]
+                    chart_labels.append(month_name)
+                    
+                    monthly_revenue = paid_invoices_df[
+                        (paid_invoices_df['Date'].dt.year == target_date.year) &
+                        (paid_invoices_df['Date'].dt.month == target_date.month)
+                    ]['Montant'].sum()
+                    chart_values.append(monthly_revenue)
+
+            if not expenses_df.empty:
+                expenses_df['Date'] = pd.to_datetime(expenses_df['Date'], format='%d/%m/%Y', errors='coerce')
+                monthly_expenses = expenses_df[(expenses_df['Date'].dt.year == now.year) & (expenses_df['Date'].dt.month == now.month)]
+                expenses_month = monthly_expenses['Montant'].sum()
+
+            # Update KPI Labels
+            self.kpi_revenue_label.configure(text=f"{revenue_month:,.2f} €".replace(",", " "))
+            self.kpi_sessions_label.configure(text=f"{sessions_month}")
+            self.kpi_unpaid_label.configure(text=f"{unpaid_total:,.2f} €".replace(",", " "))
+            self.kpi_expenses_label.configure(text=f"{expenses_month:,.2f} €".replace(",", " "))
+            self.kpi_unpaid_label.configure(text_color="#e74c3c" if unpaid_total > 0 else ("#1E1E1E", "#E0E0E0"))
+
+            # Update Chart
+            self._update_dashboard_chart(chart_labels, chart_values)
+
+        except Exception as e:
+            print(f"Erreur lors de la mise à jour du tableau de bord : {e}")
+
+    def _update_dashboard_chart(self, labels, values):
+        """Affiche un graphique à barres du CA des 6 derniers mois."""
+        self.dashboard_fig = None # Réinitialise la figure pour l'exportation
+        if self.dashboard_chart_canvas:
+            self.dashboard_chart_canvas.get_tk_widget().destroy()
+
+        try:
+            is_dark = ctk.get_appearance_mode() == "Dark"
+            bg_color = "#2B2B2B" if is_dark else "#F9F9FA"
+            text_color = "white" if is_dark else "black"
+            bar_color = "#3498db"
+
+            fig, ax = plt.subplots(figsize=(5, 2.5), dpi=100)
+            fig.patch.set_facecolor(bg_color)
+            ax.set_facecolor(bg_color)
+
+            # Change le type de graphique en courbe (plot)
+            ax.plot(labels, values, color=bar_color, marker='o', linestyle='-')
+            ax.fill_between(labels, values, color=bar_color, alpha=0.2) # Ajoute une zone remplie sous la courbe
+            
+            ax.set_title("CA (encaissé) des 6 derniers mois", color=text_color, fontsize=12)
+            ax.set_ylabel("Montant (€)", color=text_color, fontsize=10)
+            
+            ax.tick_params(axis='y', colors=text_color, labelsize=8)
+            ax.tick_params(axis='x', colors=text_color, labelsize=9, rotation=0)
+            
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['bottom'].set_color(text_color)
+            ax.spines['left'].set_color(text_color)
+
+            for i, v in enumerate(values):
+                if v > 0:
+                    ax.text(i, v + (max(values) * 0.02 if any(values) else 1), f"{int(v)}€", ha='center', va='bottom', color=text_color, fontsize=8)
+
+            fig.tight_layout(pad=0.5)
+
+            self.dashboard_fig = fig # Sauvegarde la figure pour l'export
+
+            self.dashboard_chart_canvas = FigureCanvasTkAgg(fig, master=self.dashboard_chart_frame)
+            self.dashboard_chart_canvas.draw()
+            self.dashboard_chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
+        except Exception as e:
+            print(f"Erreur graphique dashboard: {e}")
+
+    def _export_dashboard_chart(self):
+        """Exporte le graphique du tableau de bord en tant qu'image."""
+        if not self.dashboard_fig:
+            messagebox.showwarning("Export impossible", "Le graphique n'a pas encore été généré.")
+            return
+
+        try:
+            filepath = filedialog.asksaveasfilename(
+                defaultextension=".png",
+                filetypes=[("Image PNG", "*.png"), ("Image JPG", "*.jpg"), ("Tous les fichiers", "*.*")],
+                initialfile=f"Graphique_CA_{datetime.now().strftime('%Y-%m')}.png",
+                title="Enregistrer le graphique"
+            )
+
+            if not filepath:
+                return # L'utilisateur a annulé
+
+            # Sauvegarde la figure en utilisant la couleur de fond actuelle pour éviter un fond noir sur le JPG
+            self.dashboard_fig.savefig(filepath, dpi=300, bbox_inches='tight', facecolor=self.dashboard_fig.get_facecolor())
+            
+            self._show_status_message(f"Graphique exporté vers {os.path.basename(filepath)}")
+            messagebox.showinfo("Succès", f"Le graphique a été exporté avec succès vers :\n{filepath}")
+        except Exception as e:
+            messagebox.showerror("Erreur d'export", f"Une erreur est survenue lors de l'exportation du graphique :\n{e}")
+
+    def _on_kpi_click(self, kpi_name):
+        """Gère le clic sur un indicateur du tableau de bord."""
+        now = datetime.now()
+        current_year = str(now.year)
+        current_month = MONTHS_FR[now.month - 1]
+
+        if kpi_name in ["revenue_month", "sessions_month"]:
+            self._show_tool(self.search_wrapper)
+            self.search_year_var.set(current_year)
+            self._on_search_year_change(current_year) # Enable month menu
+            self.search_month_var.set(current_month)
+            self.search_status_var.set("Payées" if kpi_name == "revenue_month" else "Tous")
+            self._apply_filters_and_search()
+        
+        elif kpi_name == "unpaid":
+            self._show_tool(self.search_wrapper)
+            self.search_year_var.set("Toutes")
+            self._on_search_year_change("Toutes") # Disable month menu
+            self.search_status_var.set("Impayées")
+            self._apply_filters_and_search()
+
+        elif kpi_name == "expenses_month":
+            self._show_tool(self.expenses_wrapper)
 
     def _focus_search(self, event=None):
         """Passe à l'onglet de recherche et met le focus sur le champ de saisie."""
@@ -880,9 +1000,12 @@ class App(ctk.CTk):
 
     def _open_modify_window(self, invoice_data):
         """Ouvre une fenêtre pour modifier le statut d'une facture."""
+        is_child_session = "enfant" in invoice_data.get("Prestation", "").lower() or "adolescent" in invoice_data.get("Prestation", "").lower()
+        window_height = 620 if is_child_session else 520
+
         modify_window = ctk.CTkToplevel(self)
         modify_window.title("Modifier la Facture")
-        modify_window.geometry("400x520")
+        modify_window.geometry(f"400x{window_height}")
         modify_window.transient(self)
         modify_window.grab_set()
 
@@ -896,6 +1019,22 @@ class App(ctk.CTk):
 
         update_frame = ctk.CTkFrame(modify_window)
         update_frame.pack(pady=10, padx=10, fill="x")
+
+        # --- Nouvelle Date de Naissance Enfant (si applicable) ---
+        child_dob_entry = None
+        if is_child_session:
+            ctk.CTkLabel(update_frame, text="Date de naissance de l'enfant :").pack(pady=(10, 5))
+            child_dob_frame_modify = ctk.CTkFrame(update_frame, fg_color="transparent")
+            child_dob_frame_modify.pack(fill="x", pady=5, padx=5)
+            child_dob_frame_modify.grid_columnconfigure(0, weight=1)
+
+            child_dob_entry = ctk.CTkEntry(child_dob_frame_modify, placeholder_text="JJ/MM/AAAA")
+            child_dob_entry.grid(row=0, column=0, sticky="ew")
+            child_dob_entry.insert(0, invoice_data.get('Naissance_Enfant', ''))
+            
+            # On rend le champ éditable et on ajoute le calendrier
+            child_dob_entry.configure(state="normal")
+            child_dob_entry.bind("<1>", lambda event: self._open_calendar(child_dob_entry, make_readonly=False))
 
         # --- Nouvelle Date de Séance ---
         ctk.CTkLabel(update_frame, text="Nouvelle date de séance :").pack(pady=(10, 5))
@@ -927,14 +1066,17 @@ class App(ctk.CTk):
         regen_pdf_var.pack(pady=10)
         regen_pdf_var.select()
 
-        ctk.CTkButton(modify_window, text="Mettre à jour", font=self.font_button, command=lambda: self._update_invoice_status(
-            invoice_data, new_status_var.get(), payment_date_entry.get(), seance_date_entry.get(), regen_pdf_var.get(), modify_window
-        )).pack(pady=20)
+        def on_update():
+            new_child_dob = child_dob_entry.get() if child_dob_entry else None
+            self._update_invoice_status(
+                invoice_data, new_status_var.get(), payment_date_entry.get(), 
+                seance_date_entry.get(), new_child_dob, regen_pdf_var.get(), modify_window
+            )
+
+        ctk.CTkButton(modify_window, text="Mettre à jour", font=self.font_button, command=on_update).pack(pady=20)
 
         # Ajoute un raccourci avec la touche Entrée
-        modify_window.bind("<Return>", lambda event: self._update_invoice_status(
-            invoice_data, new_status_var.get(), payment_date_entry.get(), seance_date_entry.get(), regen_pdf_var.get(), modify_window
-        ))
+        modify_window.bind("<Return>", lambda event: on_update)
 
     def _open_calendar(self, entry_widget, make_readonly=True):
         """Ouvre une fenêtre Toplevel avec un calendrier pour sélectionner une date."""
@@ -1012,7 +1154,7 @@ class App(ctk.CTk):
         self.family_member_entries.remove(entries_to_remove)
         self.add_member_button.configure(state="normal")
 
-    def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, regen_pdf, window):
+    def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, new_child_dob, regen_pdf, window):
         """Met à jour le statut dans le fichier Excel et régénère le PDF si demandé."""
         try:
             invoice_date_str = invoice_data.get('Date')
@@ -1048,6 +1190,10 @@ class App(ctk.CTk):
             sheet_df.loc[idx, 'Methode_Paiement'] = new_status
             sheet_df.loc[idx, 'Date_Paiement'] = new_payment_date
             sheet_df.loc[idx, 'Date_Seance'] = new_seance_date
+
+            # Met à jour la date de naissance de l'enfant si fournie
+            if new_child_dob is not None:
+                sheet_df.loc[idx, 'Naissance_Enfant'] = new_child_dob
             
             all_sheets[month_name] = sheet_df
 
