@@ -12,21 +12,13 @@ from scripts.utils import resource_path
 
 if __name__ == "__main__":
     # Applique le thème et le mode d'apparence avant de créer la fenêtre principale
-    theme_name = settings_manager.get_appearance_theme()
-
-    # Liste des thèmes personnalisés
-    custom_themes = ["red", "yellow", "black"]
-
-    if theme_name in custom_themes:
-        # Construit le chemin vers le fichier JSON du thème personnalisé
-        theme_path = resource_path(os.path.join("src", "themes", f"{theme_name}.json"))
-        if os.path.exists(theme_path):
-            ctk.set_default_color_theme(theme_path)
-        else:
-            print(f"Avertissement : Fichier de thème '{theme_name}.json' introuvable. Utilisation du thème 'blue'.")
-            ctk.set_default_color_theme("blue")
+    theme_path = resource_path(os.path.join("src", "themes", "doctolib.json"))
+    if os.path.exists(theme_path):
+        ctk.set_default_color_theme(theme_path)
     else:
-        ctk.set_default_color_theme(theme_name)
+        # Fallback to default blue theme if custom theme is not found
+        print("Avertissement : Fichier de thème 'doctolib.json' introuvable. Utilisation du thème 'blue' par défaut.")
+        ctk.set_default_color_theme("blue")
 
     ctk.set_appearance_mode("System")
     app = App()

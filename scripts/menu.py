@@ -22,21 +22,20 @@ def create_menu(app):
         print(f"Erreur chargement logo menu: {e}")
 
     # Titre
-    title_label = ctk.CTkLabel(app.menu_frame, text="🤖 L'Opeyrateur", font=ctk.CTkFont(size=28, weight="bold"))
+    title_label = ctk.CTkLabel(app.menu_frame, text="L'Opeyrateur", font=app.font_title)
     title_label.grid(row=2, column=0, pady=(10, 30))
 
     # Boutons
-    btn_font = ctk.CTkFont(size=18)
     btn_width = 300
     btn_height = 50
     
     # Note : On utilise des lambdas pour appeler la méthode _show_tool de l'application
-    ctk.CTkButton(app.menu_frame, text="📝  Nouvelle Facture", font=btn_font, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.new_invoice_wrapper)).grid(row=3, column=0, pady=10)
-    ctk.CTkButton(app.menu_frame, text="🔍  Rechercher", font=btn_font, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.search_wrapper)).grid(row=4, column=0, pady=10)
-    ctk.CTkButton(app.menu_frame, text="📊  Budget", font=btn_font, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.budget_wrapper)).grid(row=5, column=0, pady=10)
-    ctk.CTkButton(app.menu_frame, text="💸  Frais", font=btn_font, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.expenses_wrapper)).grid(row=6, column=0, pady=10)
-    ctk.CTkButton(app.menu_frame, text="📜  Attestation", font=btn_font, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.attestation_wrapper)).grid(row=7, column=0, pady=10)
+    ctk.CTkButton(app.menu_frame, text="Nouvelle Facture", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.new_invoice_wrapper)).grid(row=3, column=0, pady=10)
+    ctk.CTkButton(app.menu_frame, text="Rechercher", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.search_wrapper)).grid(row=4, column=0, pady=10)
+    ctk.CTkButton(app.menu_frame, text="Budget", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.budget_wrapper)).grid(row=5, column=0, pady=10)
+    ctk.CTkButton(app.menu_frame, text="Frais", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.expenses_wrapper)).grid(row=6, column=0, pady=10)
+    ctk.CTkButton(app.menu_frame, text="Attestation", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.attestation_wrapper)).grid(row=7, column=0, pady=10)
     
-    ctk.CTkButton(app.menu_frame, text="🚪  Quitter", font=btn_font, width=btn_width, height=btn_height, fg_color="#e74c3c", hover_color="#c0392b", command=app.destroy).grid(row=8, column=0, pady=(30, 20))
+    ctk.CTkButton(app.menu_frame, text="Quitter", font=app.font_button, width=btn_width, height=btn_height, fg_color="#D32F2F", hover_color="#B71C1C", command=app.destroy).grid(row=8, column=0, pady=(30, 20))
 
-    ctk.CTkButton(app.menu_frame, text="⚙️", font=ctk.CTkFont(size=24), width=50, height=50, command=app._open_settings_window).grid(row=9, column=0, sticky="se", padx=20, pady=20)
+    ctk.CTkButton(app.menu_frame, text="⚙️", font=ctk.CTkFont(family="Montserrat", size=24), width=50, height=50, command=app._open_settings_window, fg_color="transparent", text_color=("#1E1E1E", "#E0E0E0")).grid(row=9, column=0, sticky="se", padx=20, pady=20)

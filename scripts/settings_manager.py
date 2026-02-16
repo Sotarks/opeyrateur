@@ -22,9 +22,6 @@ DEFAULT_SETTINGS = {
         'email': "",
         'attestation_city': "Carvin",
         'attestation_message': "Je soussignée, {practitioner_name}, {practitioner_title}, atteste avoir reçu {gender} {patient_name} en rendez-vous pour un suivi psychologique, en date du {consultation_date}."
-    },
-    'Appearance': {
-        'theme': 'blue'
     }
 }
 
@@ -85,26 +82,4 @@ def save_pdf_info(data):
     with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
         parser.write(configfile)
 
-    _invalidate_caches()
-
-def get_appearance_theme():
-    """Récupère le thème d'apparence depuis le fichier de configuration, en utilisant un cache."""
-    if 'theme' in _settings_cache:
-        return _settings_cache['theme']
-
-    setup_default_settings()
-    parser = _get_parser()
-    theme = parser.get('Appearance', 'theme', fallback=DEFAULT_SETTINGS['Appearance']['theme'])
-    _settings_cache['theme'] = theme
-    return theme
-
-def save_appearance_theme(theme):
-    """Sauvegarde le thème d'apparence dans le fichier de configuration."""
-    parser = _get_parser() # Assure que le parser est chargé
-    if not parser.has_section('Appearance'):
-        parser.add_section('Appearance')
-    parser.set('Appearance', 'theme', theme)
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
-        parser.write(configfile)
-    
     _invalidate_caches()

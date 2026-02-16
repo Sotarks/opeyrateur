@@ -11,7 +11,7 @@ def create_search_tab(app):
     controls_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
     controls_frame.grid_columnconfigure((1, 3), weight=1)
 
-    ctk.CTkLabel(controls_frame, text="Filtres & Recherche", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, columnspan=4, pady=(10,5), padx=10, sticky="w")
+    ctk.CTkLabel(controls_frame, text="Filtres & Recherche", font=app.font_large).grid(row=0, column=0, columnspan=4, pady=(10,5), padx=10, sticky="w")
 
     # Période
     ctk.CTkLabel(controls_frame, text="Année :").grid(row=1, column=0, padx=(10, 0), pady=5, sticky="w")
@@ -51,13 +51,13 @@ def create_search_tab(app):
     action_frame.grid(row=6, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
     action_frame.grid_columnconfigure((0,1), weight=1)
 
-    app.search_button = ctk.CTkButton(action_frame, text="🔎 Appliquer les filtres", command=app._apply_filters_and_search)
+    app.search_button = ctk.CTkButton(action_frame, text="Appliquer les filtres", command=app._apply_filters_and_search, font=app.font_button)
     app.search_button.grid(row=0, column=0, padx=(0,5), sticky="ew")
     
-    app.reset_button = ctk.CTkButton(action_frame, text="Réinitialiser", command=app._reset_filters, fg_color="gray50")
+    app.reset_button = ctk.CTkButton(action_frame, text="Réinitialiser", command=app._reset_filters, fg_color="gray50", font=app.font_button)
     app.reset_button.grid(row=0, column=1, padx=(5,0), sticky="ew")
 
-    app.export_button = ctk.CTkButton(controls_frame, text="Exporter les résultats en Excel", command=app._export_search_results, fg_color="#16a085")
+    app.export_button = ctk.CTkButton(controls_frame, text="Exporter les résultats en Excel", command=app._export_search_results, fg_color="#34D399", hover_color="#10B981", font=app.font_button)
     app.export_button.grid(row=7, column=0, columnspan=4, padx=10, pady=(5,10), sticky="ew")
 
     # --- Cadre des résultats ---

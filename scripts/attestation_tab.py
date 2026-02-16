@@ -11,7 +11,7 @@ def create_attestation_tab(app):
     form_frame.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
     form_frame.grid_columnconfigure(1, weight=1)
 
-    ctk.CTkLabel(form_frame, text="Générer une Attestation", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, columnspan=2, pady=(10, 20), padx=10)
+    ctk.CTkLabel(form_frame, text="Générer une Attestation", font=app.font_large).grid(row=0, column=0, columnspan=2, pady=(10, 20), padx=10)
 
     # Date de la consultation
     ctk.CTkLabel(form_frame, text="Date de la consultation :").grid(row=1, column=0, padx=10, pady=10, sticky="w")
@@ -41,5 +41,5 @@ def create_attestation_tab(app):
     app.attestation_patient_name.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
 
     # Bouton Générer
-    app.generate_attestation_btn = ctk.CTkButton(app.attestation_tab, text="Générer l'attestation PDF", command=app._generate_attestation_pdf, height=45)
+    app.generate_attestation_btn = ctk.CTkButton(app.attestation_tab, text="Générer l'attestation PDF", command=app._generate_attestation_pdf, height=45, font=app.font_button)
     app.generate_attestation_btn.grid(row=2, column=0, padx=20, pady=20, sticky="sew")

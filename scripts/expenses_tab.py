@@ -21,7 +21,7 @@ def create_expenses_tab(app):
     form_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
     form_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-    ctk.CTkLabel(form_frame, text="Nouvelle Dépense", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, columnspan=4, pady=(10, 5))
+    ctk.CTkLabel(form_frame, text="Nouvelle Dépense", font=app.font_large).grid(row=0, column=0, columnspan=4, pady=(10, 5), padx=10, sticky="w")
 
     # Date
     ctk.CTkLabel(form_frame, text="Date").grid(row=1, column=0, padx=5, pady=5)
@@ -54,7 +54,7 @@ def create_expenses_tab(app):
     ctk.CTkButton(form_frame, text="Parcourir...", width=100, command=lambda: _select_proof(app)).grid(row=3, column=3, padx=5, pady=5)
 
     # Bouton Ajouter
-    app.add_expense_btn = ctk.CTkButton(form_frame, text="Ajouter la dépense", command=lambda: _add_expense(app))
+    app.add_expense_btn = ctk.CTkButton(form_frame, text="Ajouter la dépense", command=lambda: _add_expense(app), font=app.font_button)
     app.add_expense_btn.grid(row=4, column=0, columnspan=4, pady=10, padx=20, sticky="ew")
     app.original_btn_color = app.add_expense_btn.cget("fg_color") # Sauvegarde la couleur par défaut
 
@@ -66,15 +66,15 @@ def create_expenses_tab(app):
 
     header_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
     header_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
-    ctk.CTkLabel(header_frame, text="Liste des frais (Année en cours)", font=ctk.CTkFont(size=14, weight="bold")).pack(side="left")
+    ctk.CTkLabel(header_frame, text="Liste des frais (Année en cours)", font=app.font_large).pack(side="left")
 
     # Frame for buttons on the right
     button_container = ctk.CTkFrame(header_frame, fg_color="transparent")
     button_container.pack(side="right")
 
-    ctk.CTkButton(button_container, text="Télécharger PDF URSSAF", fg_color="green", command=lambda: _generate_pdf_report(app)).pack(side="left", padx=(0, 5))
-    ctk.CTkButton(button_container, text="Ouvrir le dossier", command=_open_expenses_folder).pack(side="left", padx=(0, 5))
-    ctk.CTkButton(button_container, text="Réinitialiser les frais", fg_color="#992d22", command=lambda: _reset_expenses(app)).pack(side="left")
+    ctk.CTkButton(button_container, text="Télécharger PDF URSSAF", fg_color="#34D399", hover_color="#10B981", command=lambda: _generate_pdf_report(app), font=app.font_button).pack(side="left", padx=(0, 5))
+    ctk.CTkButton(button_container, text="Ouvrir le dossier", command=_open_expenses_folder, font=app.font_button).pack(side="left", padx=(0, 5))
+    ctk.CTkButton(button_container, text="Réinitialiser les frais", fg_color="#D32F2F", hover_color="#B71C1C", command=lambda: _reset_expenses(app), font=app.font_button).pack(side="left")
 
     # Treeview pour afficher les données (style tableau)
     columns = ("date", "cat", "desc", "montant", "proof_status", "proof_path")

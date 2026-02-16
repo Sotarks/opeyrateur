@@ -18,7 +18,7 @@ def create_budget_tab(app):
     selection_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
     selection_frame.grid_columnconfigure((0, 1), weight=1)
 
-    ctk.CTkLabel(selection_frame, text="Période", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, columnspan=2, pady=(10, 5))
+    ctk.CTkLabel(selection_frame, text="Période", font=app.font_large).grid(row=0, column=0, columnspan=2, pady=(10, 5), padx=10, sticky="w")
 
     # Type de vue (Année ou Mois)
     app.budget_view_type = ctk.CTkSegmentedButton(selection_frame, values=["Année", "Mois"], command=lambda v: _update_budget_inputs(app))
@@ -42,19 +42,19 @@ def create_budget_tab(app):
     # Le placement grid sera géré par _update_budget_inputs
 
     # Bouton Calculer
-    ctk.CTkButton(selection_frame, text="Calculer", command=lambda: calculate_budget(app)).grid(row=3, column=0, columnspan=2, pady=(10, 5), padx=20, sticky="ew")
+    ctk.CTkButton(selection_frame, text="Calculer", command=lambda: calculate_budget(app), font=app.font_button).grid(row=3, column=0, columnspan=2, pady=(10, 5), padx=20, sticky="ew")
 
     # Boutons Exporter
-    ctk.CTkButton(selection_frame, text="Générer Excel", command=lambda: _export_budget(app), fg_color="green").grid(row=4, column=0, padx=(20, 5), pady=(5, 10), sticky="ew")
-    ctk.CTkButton(selection_frame, text="Générer PDF (Vue actuelle)", command=lambda: _export_budget_pdf(app), fg_color="#c0392b").grid(row=4, column=1, padx=(5, 20), pady=(5, 10), sticky="ew")
-    ctk.CTkButton(selection_frame, text="Générer PDF (Registre annuel)", command=lambda: _export_annual_report(app), fg_color="#c0392b").grid(row=5, column=0, columnspan=2, padx=20, pady=(0, 10), sticky="ew")
+    ctk.CTkButton(selection_frame, text="Générer Excel", command=lambda: _export_budget(app), fg_color="#34D399", hover_color="#10B981", font=app.font_button).grid(row=4, column=0, padx=(20, 5), pady=(5, 10), sticky="ew")
+    ctk.CTkButton(selection_frame, text="Générer PDF (Vue actuelle)", command=lambda: _export_budget_pdf(app), fg_color="#D32F2F", hover_color="#B71C1C", font=app.font_button).grid(row=4, column=1, padx=(5, 20), pady=(5, 10), sticky="ew")
+    ctk.CTkButton(selection_frame, text="Générer PDF (Registre annuel)", command=lambda: _export_annual_report(app), fg_color="#D32F2F", hover_color="#B71C1C", font=app.font_button).grid(row=5, column=0, columnspan=2, padx=20, pady=(0, 10), sticky="ew")
 
     # --- Frame Résultats ---
     results_frame = ctk.CTkFrame(app.budget_tab, corner_radius=10)
     results_frame.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
     results_frame.grid_columnconfigure((0, 1), weight=1)
 
-    ctk.CTkLabel(results_frame, text="Résultats", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, columnspan=2, pady=(10, 15))
+    ctk.CTkLabel(results_frame, text="Résultats", font=app.font_large).grid(row=0, column=0, columnspan=2, pady=(10, 15), padx=10, sticky="w")
 
     ctk.CTkLabel(results_frame, text="Nombre de consultations :").grid(row=1, column=0, sticky="e", padx=10, pady=5)
     app.budget_count_label = ctk.CTkLabel(results_frame, text="0", font=ctk.CTkFont(size=14, weight="bold"))

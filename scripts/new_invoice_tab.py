@@ -10,7 +10,7 @@ def create_new_invoice_tab(app):
     client_frame.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="ew")
     client_frame.grid_columnconfigure(1, weight=1)
 
-    client_label = ctk.CTkLabel(client_frame, text="Patient(s) :", font=ctk.CTkFont(size=16, weight="bold"))
+    client_label = ctk.CTkLabel(client_frame, text="Patient(s)", font=app.font_large)
     client_label.grid(row=0, column=0, columnspan=2, pady=(10, 15), sticky="w", padx=10)
 
     app.p1_civility_frame = ctk.CTkFrame(client_frame, fg_color="transparent")
@@ -33,7 +33,7 @@ def create_new_invoice_tab(app):
     app.family_frame = ctk.CTkFrame(app.new_invoice_tab, corner_radius=10)
     app.family_frame.grid_columnconfigure(0, weight=1)
 
-    family_label = ctk.CTkLabel(app.family_frame, text="Membres de la famille (Optionnel)", font=ctk.CTkFont(size=16, weight="bold"))
+    family_label = ctk.CTkLabel(app.family_frame, text="Membres de la famille (Optionnel)", font=app.font_large)
     family_label.pack(fill="x", padx=15, pady=(10, 15))
 
     app.family_members_container = ctk.CTkFrame(app.family_frame, fg_color="transparent")
@@ -46,7 +46,7 @@ def create_new_invoice_tab(app):
     app.couple_frame = ctk.CTkFrame(app.new_invoice_tab, corner_radius=10)
     app.couple_frame.grid_columnconfigure(0, weight=1)
 
-    p2_couple_label = ctk.CTkLabel(app.couple_frame, text="Second Partenaire (Optionnel)", font=ctk.CTkFont(size=16, weight="bold"))
+    p2_couple_label = ctk.CTkLabel(app.couple_frame, text="Second Partenaire (Optionnel)", font=app.font_large)
     p2_couple_label.pack(fill="x", padx=15, pady=(10, 15))
 
     couple_partner2_frame = ctk.CTkFrame(app.couple_frame, fg_color="transparent")
@@ -62,7 +62,7 @@ def create_new_invoice_tab(app):
     app.child_info_frame = ctk.CTkFrame(app.new_invoice_tab, corner_radius=10)
     app.child_info_frame.grid_columnconfigure(0, weight=1)
     
-    p2_label = ctk.CTkLabel(app.child_info_frame, text="Second Parent (Optionnel)", font=ctk.CTkFont(size=14, weight="bold"))
+    p2_label = ctk.CTkLabel(app.child_info_frame, text="Second Parent (Optionnel)", font=app.font_bold)
     p2_label.pack(fill="x", padx=15, pady=(10, 5))
     
     parent2_frame = ctk.CTkFrame(app.child_info_frame, fg_color="transparent")
@@ -76,7 +76,7 @@ def create_new_invoice_tab(app):
     app.nom2 = ctk.CTkEntry(parent2_frame, placeholder_text="Nom")
     app.nom2.grid(row=0, column=2, padx=(5, 0), sticky="ew")
 
-    child_details_label = ctk.CTkLabel(app.child_info_frame, text="Informations sur l'enfant", font=ctk.CTkFont(size=14, weight="bold"))
+    child_details_label = ctk.CTkLabel(app.child_info_frame, text="Informations sur l'enfant", font=app.font_bold)
     child_details_label.pack(fill="x", padx=15, pady=(10, 5))
     
     app.enfant_nom = ctk.CTkEntry(app.child_info_frame, placeholder_text="Prénom & Nom de l'enfant")
@@ -91,7 +91,7 @@ def create_new_invoice_tab(app):
     details_frame.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
     details_frame.grid_columnconfigure(0, weight=1)
 
-    details_label = ctk.CTkLabel(details_frame, text="Détails de la Facture", font=ctk.CTkFont(size=16, weight="bold"))
+    details_label = ctk.CTkLabel(details_frame, text="Détails de la Facture", font=app.font_large)
     details_label.grid(row=0, column=0, pady=(10, 15), sticky="w", padx=10)
 
     seance_date_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
@@ -142,6 +142,6 @@ def create_new_invoice_tab(app):
     app.personal_note = ctk.CTkEntry(details_frame, placeholder_text="Ne sera pas affiché sur le PDF")
     app.personal_note.grid(row=5, column=0, sticky="ew", padx=10, pady=(0, 10))
 
-    app.btn = ctk.CTkButton(app.new_invoice_tab, text="Enregistrer & Générer PDF", command=app.valider, height=45, font=ctk.CTkFont(size=14, weight="bold"))
+    app.btn = ctk.CTkButton(app.new_invoice_tab, text="Enregistrer & Générer PDF", command=app.valider, height=45, font=app.font_button)
     app.btn.grid(row=3, column=0, padx=10, pady=20, sticky="sew")
     app.new_invoice_tab.grid_rowconfigure(3, weight=1)

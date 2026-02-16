@@ -76,6 +76,13 @@ class App(ctk.CTk):
             "Consultation familiale": 75.0,
             "Consultation de couple": 75.0
         }
+        
+        # --- Définition des polices ---
+        self.font_regular = ctk.CTkFont(family="Montserrat", size=13)
+        self.font_bold = ctk.CTkFont(family="Montserrat", size=13, weight="bold")
+        self.font_large = ctk.CTkFont(family="Montserrat", size=16, weight="bold")
+        self.font_title = ctk.CTkFont(family="Montserrat", size=24, weight="bold")
+        self.font_button = ctk.CTkFont(family="Montserrat", size=14, weight="bold")
 
         self.family_member_entries = []
         self.expense_sort_state = ('date', False) # (column_id, is_reversed)
@@ -147,9 +154,9 @@ class App(ctk.CTk):
         self.login_frame.grid_columnconfigure(0, weight=1)
         self.login_frame.grid_rowconfigure((0, 5), weight=1)
 
-        ctk.CTkLabel(self.login_frame, text="Application Verrouillée", font=ctk.CTkFont(size=24, weight="bold")).grid(row=1, column=0, pady=20)
+        ctk.CTkLabel(self.login_frame, text="Application Verrouillée", font=self.font_title).grid(row=1, column=0, pady=20)
         
-        self.pin_entry = ctk.CTkEntry(self.login_frame, placeholder_text="Code PIN", show="*", width=200, justify="center", font=ctk.CTkFont(size=18))
+        self.pin_entry = ctk.CTkEntry(self.login_frame, placeholder_text="Code PIN", show="*", width=200, justify="center", font=self.font_large)
         self.pin_entry.grid(row=2, column=0, pady=10)
         self.pin_entry.bind("<Return>", self._check_pin)
         self.pin_entry.focus()
@@ -158,14 +165,14 @@ class App(ctk.CTk):
         numpad_frame = ctk.CTkFrame(self.login_frame, fg_color="transparent")
         numpad_frame.grid(row=3, column=0, pady=10)
 
-        buttons = [
+        numpad_buttons = [
             '1', '2', '3',
             '4', '5', '6',
             '7', '8', '9',
             'C', '0', '⌫'
         ]
 
-        for i, btn_text in enumerate(buttons):
+        for i, btn_text in enumerate(numpad_buttons):
             row, col = divmod(i, 3)
             
             action = None
@@ -176,10 +183,10 @@ class App(ctk.CTk):
             elif btn_text == '⌫':
                 action = self._on_numpad_backspace
                 
-            btn = ctk.CTkButton(numpad_frame, text=btn_text, width=70, height=70, font=ctk.CTkFont(size=18), command=action)
+            btn = ctk.CTkButton(numpad_frame, text=btn_text, width=70, height=70, font=self.font_large, command=action, fg_color="transparent", border_width=1, text_color=("#1E1E1E", "#E0E0E0"))
             btn.grid(row=row, column=col, padx=5, pady=5)
 
-        ctk.CTkButton(self.login_frame, text="Déverrouiller", command=self._check_pin, width=230, height=40).grid(row=4, column=0, pady=20)
+        ctk.CTkButton(self.login_frame, text="Déverrouiller", command=self._check_pin, width=230, height=40, font=self.font_button).grid(row=4, column=0, pady=20)
 
     def _check_pin(self, event=None):
         """Vérifie le code PIN saisi."""
@@ -208,43 +215,31 @@ class App(ctk.CTk):
         """Ouvre la fenêtre des réglages."""
         settings_window = ctk.CTkToplevel(self)
         settings_window.title("Réglages")
-        settings_window.geometry("500x700")
+        settings_window.geometry("500x600")
         settings_window.transient(self)
         settings_window.grab_set()
 
         settings_window.grid_columnconfigure(0, weight=1)
 
-        btn_font = ctk.CTkFont(size=14)
+        ctk.CTkLabel(settings_window, text="Personnalisation", font=self.font_large).pack(pady=(20, 10))
+        ctk.CTkButton(settings_window, text="Modifier les informations des PDF", font=self.font_button, command=self._open_pdf_settings_window).pack(pady=10, padx=40, fill="x")
+        ctk.CTkButton(settings_window, text="Changer le code PIN", font=self.font_button, command=self._open_change_pin_window).pack(pady=10, padx=40, fill="x")
 
-        ctk.CTkLabel(settings_window, text="Personnalisation", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(20, 10))
-        ctk.CTkButton(settings_window, text="Modifier les informations des PDF", font=btn_font, command=self._open_pdf_settings_window).pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Changer le code PIN", font=btn_font, command=self._open_change_pin_window).pack(pady=10, padx=40, fill="x")
-
-        theme_frame = ctk.CTkFrame(settings_window, fg_color="transparent")
-        theme_frame.pack(pady=10, padx=40, fill="x")
-        theme_frame.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(theme_frame, text="Thème de l'application :").grid(row=0, column=0, padx=(0, 10), sticky="w")
+        ctk.CTkLabel(settings_window, text="Outils de Maintenance", font=self.font_large).pack(pady=(20, 10))
+        ctk.CTkLabel(settings_window, text="Ces outils permettent de corriger des problèmes de données.", font=self.font_regular).pack(pady=(0, 10))
         
-        themes = ["blue", "green", "dark-blue", "red", "yellow", "black"]
-        current_theme = settings_manager.get_appearance_theme()
-        
-        theme_menu = ctk.CTkOptionMenu(theme_frame, values=themes, command=self._change_theme)
-        theme_menu.set(current_theme)
-        theme_menu.grid(row=0, column=1, sticky="ew")
+        ctk.CTkButton(settings_window, text="Régénérer les PDF des factures", font=self.font_button, command=self._regenerate_all_invoice_pdfs).pack(pady=10, padx=40, fill="x")
+        ctk.CTkButton(settings_window, text="Regénérer les fichiers Excel des factures", font=self.font_button, command=self._regenerate_all_invoices_excel).pack(pady=10, padx=40, fill="x")
 
-        ctk.CTkLabel(settings_window, text="Outils de Maintenance", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(20, 10))
-        ctk.CTkLabel(settings_window, text="Ces outils permettent de corriger des problèmes de données.").pack(pady=(0, 10))
-        
-        ctk.CTkButton(settings_window, text="Régénérer les PDF des factures", font=btn_font, command=self._regenerate_all_invoice_pdfs, fg_color="#2980b9").pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Regénérer les fichiers Excel des factures", font=btn_font, command=self._regenerate_all_invoices_excel, fg_color="#3498db").pack(pady=10, padx=40, fill="x")
+        ctk.CTkLabel(settings_window, text="Zone de Danger", font=self.font_large, text_color="#E53935").pack(pady=(20, 10))
+        ctk.CTkLabel(settings_window, text="Ces actions sont irréversibles.", font=self.font_regular).pack(pady=(0, 20))
 
-        ctk.CTkLabel(settings_window, text="Zone de Danger", font=ctk.CTkFont(size=20, weight="bold"), text_color="#e74c3c").pack(pady=(20, 10))
-        ctk.CTkLabel(settings_window, text="Ces actions sont irréversibles.", font=ctk.CTkFont(size=12)).pack(pady=(0, 20))
-
-        ctk.CTkButton(settings_window, text="Supprimer TOUTES les données", font=btn_font, command=self._delete_all_data, fg_color="#992d22").pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Supprimer toutes les FACTURES", font=btn_font, command=self._delete_invoices, fg_color="#c0392b").pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Supprimer tous les FRAIS", font=btn_font, command=self._delete_expenses, fg_color="#c0392b").pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Supprimer tous les budgets", font=btn_font, command=self._delete_budgets, fg_color="#c0392b").pack(pady=10, padx=40, fill="x")
+        danger_button_color = "#D32F2F"
+        danger_hover_color = "#B71C1C"
+        ctk.CTkButton(settings_window, text="Supprimer TOUTES les données", font=self.font_button, command=self._delete_all_data, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
+        ctk.CTkButton(settings_window, text="Supprimer toutes les FACTURES", font=self.font_button, command=self._delete_invoices, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
+        ctk.CTkButton(settings_window, text="Supprimer tous les FRAIS", font=self.font_button, command=self._delete_expenses, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
+        ctk.CTkButton(settings_window, text="Supprimer tous les budgets", font=self.font_button, command=self._delete_budgets, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
 
     def _open_pdf_settings_window(self):
         """Ouvre la fenêtre de modification des informations PDF."""
@@ -264,7 +259,7 @@ class App(ctk.CTk):
         entries = {}
 
         # --- Section Société ---
-        ctk.CTkLabel(scrollable_frame, text="Informations Société", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5), anchor="w")
+        ctk.CTkLabel(scrollable_frame, text="Informations Société", font=self.font_large).pack(pady=(10, 5), anchor="w")
         
         ctk.CTkLabel(scrollable_frame, text="Nom de la société :").pack(anchor="w", padx=10)
         entries['company_name'] = ctk.CTkEntry(scrollable_frame)
@@ -292,7 +287,7 @@ class App(ctk.CTk):
         entries['rpps'].insert(0, pdf_info.get('rpps', ''))
 
         # --- Section Signature ---
-        ctk.CTkLabel(scrollable_frame, text="Informations Signature & Contact", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5), anchor="w")
+        ctk.CTkLabel(scrollable_frame, text="Informations Signature & Contact", font=self.font_large).pack(pady=(10, 5), anchor="w")
         
         ctk.CTkLabel(scrollable_frame, text="Nom complet (pour signature) :").pack(anchor="w", padx=10)
         entries['practitioner_name'] = ctk.CTkEntry(scrollable_frame)
@@ -315,7 +310,7 @@ class App(ctk.CTk):
         entries['email'].insert(0, pdf_info.get('email', ''))
 
         # --- Section Attestation ---
-        ctk.CTkLabel(scrollable_frame, text="Informations Attestation", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5), anchor="w")
+        ctk.CTkLabel(scrollable_frame, text="Informations Attestation", font=self.font_large).pack(pady=(10, 5), anchor="w")
         
         ctk.CTkLabel(scrollable_frame, text="Ville pour 'Fait à...' :").pack(anchor="w", padx=10)
         entries['attestation_city'] = ctk.CTkEntry(scrollable_frame)
@@ -323,7 +318,7 @@ class App(ctk.CTk):
         entries['attestation_city'].insert(0, pdf_info.get('attestation_city', ''))
 
         ctk.CTkLabel(scrollable_frame, text="Modèle du message de l'attestation :").pack(anchor="w", padx=10)
-        ctk.CTkLabel(scrollable_frame, text="Variables: {practitioner_name}, {practitioner_title}, {gender}, {patient_name}, {consultation_date}", font=ctk.CTkFont(size=10, slant="italic")).pack(anchor="w", padx=10)
+        ctk.CTkLabel(scrollable_frame, text="Variables: {practitioner_name}, {practitioner_title}, {gender}, {patient_name}, {consultation_date}", font=ctk.CTkFont(family="Montserrat", size=10, slant="italic")).pack(anchor="w", padx=10)
         entries['attestation_message'] = ctk.CTkTextbox(scrollable_frame, height=100)
         entries['attestation_message'].pack(fill="x", expand=True, padx=10, pady=(0, 15))
         entries['attestation_message'].insert("1.0", pdf_info.get('attestation_message', ''))
@@ -332,10 +327,10 @@ class App(ctk.CTk):
         button_frame.pack(fill="x", padx=10, pady=10)
         button_frame.grid_columnconfigure((0, 1), weight=1)
 
-        save_button = ctk.CTkButton(button_frame, text="Enregistrer", command=lambda: self._save_pdf_settings(entries, pdf_settings_window))
+        save_button = ctk.CTkButton(button_frame, text="Enregistrer", command=lambda: self._save_pdf_settings(entries, pdf_settings_window), font=self.font_button)
         save_button.grid(row=0, column=0, padx=(0, 5), sticky="ew")
         
-        cancel_button = ctk.CTkButton(button_frame, text="Annuler", command=pdf_settings_window.destroy, fg_color="gray50")
+        cancel_button = ctk.CTkButton(button_frame, text="Annuler", command=pdf_settings_window.destroy, fg_color="gray50", font=self.font_button)
         cancel_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
     def _save_pdf_settings(self, entries, window):
@@ -366,7 +361,7 @@ class App(ctk.CTk):
 
         pin_window.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(pin_window, text="Changer votre code PIN", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 15))
+        ctk.CTkLabel(pin_window, text="Changer votre code PIN", font=self.font_large).pack(pady=(20, 15))
 
         entries = {}
         
@@ -388,10 +383,10 @@ class App(ctk.CTk):
         button_frame.pack(fill="x", padx=20, pady=10)
         button_frame.grid_columnconfigure((0, 1), weight=1)
 
-        save_button = ctk.CTkButton(button_frame, text="Enregistrer", command=lambda: self._change_pin(entries, pin_window))
+        save_button = ctk.CTkButton(button_frame, text="Enregistrer", command=lambda: self._change_pin(entries, pin_window), font=self.font_button)
         save_button.grid(row=0, column=0, padx=(0, 5), sticky="ew")
         
-        cancel_button = ctk.CTkButton(button_frame, text="Annuler", command=pin_window.destroy, fg_color="gray50")
+        cancel_button = ctk.CTkButton(button_frame, text="Annuler", command=pin_window.destroy, fg_color="gray50", font=self.font_button)
         cancel_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
     def _change_pin(self, entries, window):
@@ -403,11 +398,6 @@ class App(ctk.CTk):
         else:
             messagebox.showerror("Erreur", message, parent=window)
             entries['current'].focus()
-
-    def _change_theme(self, new_theme):
-        """Sauvegarde le nouveau thème et informe l'utilisateur."""
-        settings_manager.save_appearance_theme(new_theme)
-        messagebox.showinfo("Thème modifié", "Le nouveau thème sera appliqué au prochain redémarrage de l'application.")
 
     def _delete_directory(self, dir_path, dir_name):
         if messagebox.askyesno("Confirmation", f"Êtes-vous sûr de vouloir supprimer définitivement le dossier '{dir_name}' et tout son contenu ?"):
@@ -595,7 +585,7 @@ class App(ctk.CTk):
                 message = "🔎\nUtilisez les filtres ci-dessus et cliquez sur 'Appliquer' pour commencer."
             else:
                 message = "🧐\nAucune facture ne correspond à votre recherche."
-            empty_label = ctk.CTkLabel(self.results_frame, text=message, font=ctk.CTkFont(size=16), text_color="gray")
+            empty_label = ctk.CTkLabel(self.results_frame, text=message, font=self.font_large, text_color="gray")
             empty_label.pack(pady=50, padx=20, expand=True)
             return
 
@@ -618,12 +608,12 @@ class App(ctk.CTk):
             elif payment_status != "N/A":
                 status_color = "#2ecc71"
             
-            status_indicator = ctk.CTkLabel(invoice_frame, text="●", text_color=status_color, font=ctk.CTkFont(size=20))
+            status_indicator = ctk.CTkLabel(invoice_frame, text="●", text_color=status_color, font=ctk.CTkFont(size=24))
             status_indicator.grid(row=0, column=0, sticky="w", padx=(10, 0))
 
             info_text = f"ID: {row['ID']} | Date: {row['Date']} | Patient: {patient_name} | {row['Montant']:.2f} € | Statut: {payment_status}"
             
-            info_label = ctk.CTkLabel(invoice_frame, text=info_text, anchor="w")
+            info_label = ctk.CTkLabel(invoice_frame, text=info_text, anchor="w", font=self.font_regular)
             info_label.grid(row=0, column=1, sticky="ew", padx=(5, 10), pady=10)
 
             row_data = row.to_dict()
@@ -658,14 +648,18 @@ class App(ctk.CTk):
         wrapper = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         
         # Header
-        header = ctk.CTkFrame(wrapper, height=50, corner_radius=0, fg_color=("gray85", "gray20"))
+        header = ctk.CTkFrame(wrapper, height=50, corner_radius=0, fg_color=["#FFFFFF", "#1E1E1E"])
         header.pack(fill="x", side="top")
         
-        btn_back = ctk.CTkButton(header, text="⬅ Menu", width=80, height=30, command=self._show_menu)
+        btn_back = ctk.CTkButton(header, text="⬅  Menu", width=80, height=30, command=self._show_menu, font=self.font_bold, fg_color="transparent", text_color="#0596DE", hover_color=["#F0F0F0", "#2A2A2A"])
         btn_back.pack(side="left", padx=10, pady=10)
         
-        lbl_title = ctk.CTkLabel(header, text=title, font=ctk.CTkFont(size=18, weight="bold"))
+        lbl_title = ctk.CTkLabel(header, text=title, font=self.font_large)
         lbl_title.pack(side="left", padx=20)
+
+        # Ligne de séparation sous l'en-tête
+        line = ctk.CTkFrame(wrapper, height=1, fg_color=["#E0E0E0", "#2A2A2A"])
+        line.pack(fill="x", side="top")
         
         content = ctk.CTkFrame(wrapper, corner_radius=0, fg_color="transparent")
         content.pack(fill="both", expand=True)
@@ -895,10 +889,10 @@ class App(ctk.CTk):
         info_frame = ctk.CTkFrame(modify_window, fg_color="transparent")
         info_frame.pack(pady=10, padx=10, fill="x")
         
-        ctk.CTkLabel(info_frame, text=f"Facture: {invoice_data['ID']}").pack(anchor="w")
-        ctk.CTkLabel(info_frame, text=f"Patient: {invoice_data.get('Prenom', '')} {invoice_data.get('Nom', '')}").pack(anchor="w")
-        ctk.CTkLabel(info_frame, text=f"Date de séance actuelle: {invoice_data.get('Date_Seance', 'N/A')}").pack(anchor="w", pady=(5,0))
-        ctk.CTkLabel(info_frame, text=f"Statut actuel: {invoice_data['Methode_Paiement']}", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10,0))
+        ctk.CTkLabel(info_frame, text=f"Facture: {invoice_data['ID']}", font=self.font_regular).pack(anchor="w")
+        ctk.CTkLabel(info_frame, text=f"Patient: {invoice_data.get('Prenom', '')} {invoice_data.get('Nom', '')}", font=self.font_regular).pack(anchor="w")
+        ctk.CTkLabel(info_frame, text=f"Date de séance actuelle: {invoice_data.get('Date_Seance', 'N/A')}", font=self.font_regular).pack(anchor="w", pady=(5,0))
+        ctk.CTkLabel(info_frame, text=f"Statut actuel: {invoice_data['Methode_Paiement']}", font=self.font_bold).pack(anchor="w", pady=(10,0))
 
         update_frame = ctk.CTkFrame(modify_window)
         update_frame.pack(pady=10, padx=10, fill="x")
@@ -917,23 +911,23 @@ class App(ctk.CTk):
         calendar_button.grid(row=0, column=1, padx=(5,0))
 
         # --- Nouveau Statut de Paiement ---
-        ctk.CTkLabel(update_frame, text="Nouveau statut de paiement :").pack(pady=(10, 5))
+        ctk.CTkLabel(update_frame, text="Nouveau statut de paiement :", font=self.font_regular).pack(pady=(10, 5))
         new_status_var = ctk.CTkOptionMenu(update_frame, values=["Virement", "Espèce", "Chèque"])
         new_status_var.pack(pady=5)
         new_status_var.set("Virement")
 
-        ctk.CTkLabel(update_frame, text="Date de paiement :").pack(pady=(10, 5))
+        ctk.CTkLabel(update_frame, text="Date de paiement :", font=self.font_regular).pack(pady=(10, 5))
         payment_date_entry = ctk.CTkEntry(update_frame, placeholder_text="JJ/MM/AAAA")
         payment_date_entry.pack(pady=5)
         payment_date_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
         payment_date_entry.configure(state="readonly")
         payment_date_entry.bind("<1>", lambda event: self._open_calendar(payment_date_entry))
 
-        regen_pdf_var = ctk.CTkCheckBox(update_frame, text="Régénérer le PDF de la facture")
+        regen_pdf_var = ctk.CTkCheckBox(update_frame, text="Régénérer le PDF de la facture", font=self.font_regular)
         regen_pdf_var.pack(pady=10)
         regen_pdf_var.select()
 
-        ctk.CTkButton(modify_window, text="Mettre à jour", command=lambda: self._update_invoice_status(
+        ctk.CTkButton(modify_window, text="Mettre à jour", font=self.font_button, command=lambda: self._update_invoice_status(
             invoice_data, new_status_var.get(), payment_date_entry.get(), seance_date_entry.get(), regen_pdf_var.get(), modify_window
         )).pack(pady=20)
 
@@ -1093,7 +1087,7 @@ class App(ctk.CTk):
         
         dialog.grid_columnconfigure(0, weight=1)
 
-        label = ctk.CTkLabel(dialog, text="Facture générée avec succès !", font=ctk.CTkFont(size=18, weight="bold"))
+        label = ctk.CTkLabel(dialog, text="Facture générée avec succès !", font=self.font_large)
         label.pack(pady=(20, 15))
 
         button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
@@ -1122,22 +1116,22 @@ class App(ctk.CTk):
             webbrowser.open("https://pro.doctolib.fr/patient_messaging")
 
         # Ouvrir l'emplacement (Vert)
-        folder_button = ctk.CTkButton(button_frame, text="📂  Ouvrir l'emplacement", command=open_folder, fg_color="#2ecc71", hover_color="#27ae60", height=40, font=ctk.CTkFont(size=14))
+        folder_button = ctk.CTkButton(button_frame, text="📂  Ouvrir l'emplacement", command=open_folder, fg_color="#34D399", hover_color="#10B981", height=40, font=self.font_button)
         folder_button.pack(pady=8, fill="x")
 
         # Visualiser le PDF (Rouge)
-        pdf_button = ctk.CTkButton(button_frame, text="📄  Visualiser le PDF", command=open_pdf, fg_color="#e74c3c", hover_color="#c0392b", height=40, font=ctk.CTkFont(size=14))
+        pdf_button = ctk.CTkButton(button_frame, text="📄  Visualiser le PDF", command=open_pdf, height=40, font=self.font_button)
         pdf_button.pack(pady=8, fill="x")
 
         # Imprimer (Orange)
-        print_button = ctk.CTkButton(button_frame, text="🖨️  Imprimer", command=print_pdf, fg_color="#e67e22", hover_color="#d35400", height=40, font=ctk.CTkFont(size=14))
+        print_button = ctk.CTkButton(button_frame, text="🖨️  Imprimer", command=print_pdf, fg_color="transparent", border_width=1, text_color=("#1E1E1E", "#E0E0E0"), height=40, font=self.font_button)
         print_button.pack(pady=8, fill="x")
 
         # Ouvrir Doctolib (Bleu)
-        doctolib_button = ctk.CTkButton(button_frame, text="📅  Ouvrir Doctolib", command=open_doctolib, fg_color="#0596DE", hover_color="#047bb7", height=40, font=ctk.CTkFont(size=14))
+        doctolib_button = ctk.CTkButton(button_frame, text="📅  Ouvrir Doctolib", command=open_doctolib, fg_color="transparent", border_width=1, text_color=("#1E1E1E", "#E0E0E0"), height=40, font=self.font_button)
         doctolib_button.pack(pady=8, fill="x")
         
-        ok_button = ctk.CTkButton(dialog, text="Fermer", command=dialog.destroy, fg_color="gray50", hover_color="gray40", height=40)
+        ok_button = ctk.CTkButton(dialog, text="Fermer", command=dialog.destroy, fg_color="gray50", hover_color="gray40", height=40, font=self.font_button)
         ok_button.pack(pady=(10, 20), padx=50, fill="x")
 
         # Centre la fenêtre par rapport à la fenêtre principale
