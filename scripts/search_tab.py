@@ -1,5 +1,4 @@
 import customtkinter as ctk
-from .data_manager import get_available_years, MONTHS_FR
 
 def create_search_tab(app):
     """Crée les widgets pour l'onglet 'Rechercher' et les attache à l'instance de l'application."""
@@ -12,6 +11,8 @@ def create_search_tab(app):
     controls_frame.grid_columnconfigure((1, 3), weight=1)
 
     ctk.CTkLabel(controls_frame, text="Filtres & Recherche", font=app.font_large).grid(row=0, column=0, columnspan=4, pady=(10,5), padx=10, sticky="w")
+
+    from .data_manager import get_available_years, MONTHS_FR
 
     # Période
     ctk.CTkLabel(controls_frame, text="Année :").grid(row=1, column=0, padx=(10, 0), pady=5, sticky="w")

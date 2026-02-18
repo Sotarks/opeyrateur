@@ -304,18 +304,24 @@ def generate_expenses_report(year, df_expenses):
     pdf.cell(0, 10, f"Registre des Dépenses - Année {year}", ln=True, align='C')
     pdf.ln(10)
 
-    # Tableau
-    pdf.set_font("Arial", 'B', 10)
-    pdf.set_fill_color(240, 240, 240)
-    
-    # En-têtes
-    pdf.cell(30, 8, "Date", 1, 0, 'C', fill=True)
-    pdf.cell(40, 8, "Catégorie", 1, 0, 'C', fill=True)
-    pdf.cell(90, 8, "Description", 1, 0, 'C', fill=True)
-    pdf.cell(30, 8, "Montant", 1, 1, 'C', fill=True)
+    def draw_header(pdf_instance):
+        # Tableau
+        pdf_instance.set_font("Arial", 'B', 10)
+        pdf_instance.set_fill_color(240, 240, 240)
+        
+        # En-têtes
+        pdf_instance.cell(30, 8, "Date", 1, 0, 'C', fill=True)
+        pdf_instance.cell(40, 8, "Catégorie", 1, 0, 'C', fill=True)
+        pdf_instance.cell(90, 8, "Description", 1, 0, 'C', fill=True)
+        pdf_instance.cell(30, 8, "Montant", 1, 1, 'C', fill=True)
 
-    pdf.set_font("Arial", '', 10)
+        pdf_instance.set_font("Arial", '', 10)
+
+    draw_header(pdf)
+
     total = 0.0
+    row_count = 0
+    ENTRIES_PER_PAGE = 20
 
     # Create a copy to avoid SettingWithCopyWarning and sort by date
     df_expenses_copy = df_expenses.copy()
@@ -326,6 +332,11 @@ def generate_expenses_report(year, df_expenses):
         print(f"Could not sort expenses by date: {e}")
 
     for _, row in df_expenses_copy.iterrows():
+        if row_count >= ENTRIES_PER_PAGE:
+            pdf.add_page()
+            draw_header(pdf)
+            row_count = 0
+
         date = str(row['Date'])
         cat = str(row['Categorie'])
         desc = str(row['Description'])
@@ -337,6 +348,8 @@ def generate_expenses_report(year, df_expenses):
         pdf.cell(40, 8, cat[:20], 1, 0, 'L') # Tronque si trop long
         pdf.cell(90, 8, desc[:50], 1, 0, 'L')
         pdf.cell(30, 8, f"{montant:.2f} EUR", 1, 1, 'R')
+
+        row_count += 1
 
     # Total
     pdf.ln(5)
@@ -414,7 +427,7 @@ def generate_expenses_report(year, df_expenses):
     pdf.output(full_path)
     return full_path
 
-def generate_budget_report(year, month, df_budget):
+def generate_budget_report(year, month, quarter, df_budget):
     """Génère un rapport PDF pour le budget (mensuel ou annuel)."""
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=25)
@@ -426,6 +439,8 @@ def generate_budget_report(year, month, df_budget):
     title = f"Registre des Recettes - {year}"
     if month:
         title += f" - {month}"
+    elif quarter:
+        title += f" - {quarter}"
     
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, title, ln=True, align='C')
@@ -440,19 +455,22 @@ def generate_budget_report(year, month, df_budget):
     pdf.cell(0, 8, f"Total Brut : {total:.2f} EUR", ln=True)
     pdf.ln(10)
 
-    # Tableau
-    pdf.set_font("Arial", 'B', 9)
-    pdf.set_fill_color(240, 240, 240)
-    
-    # En-têtes
-    pdf.cell(22, 8, "Date", 1, 0, 'C', fill=True)
-    pdf.cell(35, 8, "N Facture", 1, 0, 'C', fill=True)
-    pdf.cell(45, 8, "Patient", 1, 0, 'C', fill=True)
-    pdf.cell(45, 8, "Prestation", 1, 0, 'C', fill=True)
-    pdf.cell(23, 8, "Paiement", 1, 0, 'C', fill=True)
-    pdf.cell(20, 8, "Montant", 1, 1, 'C', fill=True)
+    def draw_header(pdf_instance):
+        # Tableau
+        pdf_instance.set_font("Arial", 'B', 9)
+        pdf_instance.set_fill_color(240, 240, 240)
+        
+        # En-têtes
+        pdf_instance.cell(22, 8, "Date", 1, 0, 'C', fill=True)
+        pdf_instance.cell(35, 8, "N Facture", 1, 0, 'C', fill=True)
+        pdf_instance.cell(45, 8, "Patient", 1, 0, 'C', fill=True)
+        pdf_instance.cell(45, 8, "Prestation", 1, 0, 'C', fill=True)
+        pdf_instance.cell(23, 8, "Paiement", 1, 0, 'C', fill=True)
+        pdf_instance.cell(20, 8, "Montant", 1, 1, 'C', fill=True)
 
-    pdf.set_font("Arial", '', 8)
+        pdf_instance.set_font("Arial", '', 8)
+
+    draw_header(pdf)
 
     if not df_budget.empty:
         # Tri par date
@@ -463,19 +481,39 @@ def generate_budget_report(year, month, df_budget):
         except:
             pass
 
+        row_count = 0
+        ENTRIES_PER_PAGE = 20
+
         for _, row in df_budget.iterrows():
-            patient = f"{row.get('Nom', '')} {row.get('Prenom', '')}"
+            if row_count >= ENTRIES_PER_PAGE:
+                pdf.add_page()
+                draw_header(pdf)
+                row_count = 0
+
+            patient_name = row.get('Nom_Enfant')
+            if pd.isna(patient_name) or not patient_name:
+                patient_name = f"{row.get('Prenom', '')} {row.get('Nom', '')}"
+            
+            patient = str(patient_name)
+
             pdf.cell(22, 8, str(row.get('Date', '')), 1, 0, 'C')
             pdf.cell(35, 8, str(row.get('ID', '')), 1, 0, 'C')
             pdf.cell(45, 8, patient[:25], 1, 0, 'L') # Tronque si trop long
             pdf.cell(45, 8, str(row.get('Prestation', ''))[:25], 1, 0, 'L')
             pdf.cell(23, 8, str(row.get('Methode_Paiement', ''))[:12], 1, 0, 'C')
             pdf.cell(20, 8, f"{row.get('Montant', 0):.2f}", 1, 1, 'R')
+            
+            row_count += 1
 
     # Sauvegarde
     os.makedirs(config.BUDGET_DIR, exist_ok=True)
     
-    filename_part = f"{year}_{month}" if month else f"{year}"
+    filename_part = f"{year}"
+    if month:
+        filename_part += f"_{month}"
+    elif quarter:
+        filename_part += f"_{quarter}"
+
     filename = f"Registre_Recettes_{filename_part}.pdf"
     full_path = os.path.join(config.BUDGET_DIR, filename)
     pdf.output(full_path)

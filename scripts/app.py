@@ -1,5 +1,4 @@
 import customtkinter as ctk
-import pandas as pd
 from datetime import datetime
 import os
 import ast
@@ -8,34 +7,46 @@ import threading
 import queue 
 from tkinter import messagebox, PhotoImage
 import tkinter as tk
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from tkcalendar import Calendar
-import webbrowser
-import shutil
+from tkinter import filedialog
 
 # --- Imports des modules séparés ---
 from . import config 
 from . import pin_manager
 from . import settings_manager 
 from .utils import resource_path
-from .pdf_viewer import PDFViewer
-from .pdf_generator import generate_pdf, generate_attestation_pdf
-from .data_manager import (save_to_excel, get_invoice_path, get_yearly_invoice_count, load_all_data, load_year_data, backup_database, MONTHS_FR, delete_invoice, get_available_years, load_expenses)
-from .new_invoice_tab import create_new_invoice_tab
-from .search_tab import create_search_tab
-from .budget_tab import create_budget_tab, calculate_budget
-from .expenses_tab import create_expenses_tab, refresh_expenses_list
-from tkinter import filedialog
-from .attestation_tab import create_attestation_tab
 from .menu import create_menu
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        # --- Fenêtre de chargement ---
+        self.title("Opeyrateur - Chargement en cours...")
+        # Centrer la fenêtre de chargement
+        start_width = 400
+        start_height = 200
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width / 2) - (start_width / 2)
+        y = (screen_height / 2) - (start_height / 2)
+        self.geometry(f'{start_width}x{start_height}+{int(x)}+{int(y)}')
+
+        loading_frame = ctk.CTkFrame(self)
+        ctk.CTkLabel(loading_frame, text="Chargement de l'application...", font=("Montserrat", 16)).pack(pady=(40, 10))
+        progress_bar = ctk.CTkProgressBar(loading_frame, width=300)
+        progress_bar.pack(pady=10, padx=20)
+        progress_bar.start()
+
+        # --- Configuration de la grille principale ---
+        self.grid_rowconfigure(0, weight=1) # Ligne pour le contenu principal
+        self.grid_rowconfigure(1, weight=0) # Ligne pour la barre de statut
+        self.grid_columnconfigure(0, weight=1)
+        loading_frame.grid(row=0, column=0, rowspan=2, sticky="nsew")
+
+        self.update_idletasks() # Forcer l'affichage de la fenêtre de chargement
+        start_time = time.time()
+
         self.title("Opeyrateur - A. Peyrat")
-        self.geometry("500x650") # Taille initiale pour la fenêtre de login
 
         # --- Définir l'icône de la fenêtre ---
         try:
@@ -64,28 +75,16 @@ class App(ctk.CTk):
         self.is_expenses_tab_initialized = False
         self.is_attestation_tab_initialized = False
 
-        self.dashboard_chart_canvas = None
-        self.dashboard_fig = None
         # --- Caches pour la performance ---
         self.data_cache = {}
         self.regeneration_queue = queue.Queue()
-        self.current_search_results_df = pd.DataFrame()
+        self.current_search_results_df = None
 
         # Assure que la configuration du PIN existe
         pin_manager.setup_pin_if_needed()
 
         # Assure que la configuration des PDF existe
         settings_manager.setup_default_settings()
-
-        # --- Configuration de la grille principale ---
-        self.grid_rowconfigure(0, weight=1) # Ligne pour le contenu principal
-        self.grid_rowconfigure(1, weight=0) # Ligne pour la barre de statut
-        self.grid_columnconfigure(0, weight=1)
-
-        # --- Frame de Connexion (affichée au démarrage) ---
-        self.login_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        self.login_frame.grid(row=0, column=0, sticky="nsew")
-        self._create_login_screen()
 
         # --- Frame du Menu Principal ---
         self.menu_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -120,6 +119,21 @@ class App(ctk.CTk):
         self.bind("<Control-f>", self._focus_search)
         # Le bind sur le wrapper assure que le raccourci n'est actif que sur cet écran
         self.new_invoice_wrapper.bind("<Control-Return>", lambda event: self.valider())
+
+        # --- Fin de l'initialisation, on affiche l'écran de connexion ---
+        end_time = time.time()
+        # Ce temps ne sera visible que dans la console (mode debug)
+        print(f"Temps de chargement de l'initialisation : {end_time - start_time:.2f} secondes.")
+
+        progress_bar.stop()
+        loading_frame.destroy()
+
+        self.geometry("1920x1080")
+        self.resizable(False, False)
+
+        self.login_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.login_frame.grid(row=0, column=0, sticky="nsew")
+        self._create_login_screen()
 
     def _create_login_screen(self):
         """Crée l'interface de connexion par code PIN."""
@@ -166,7 +180,6 @@ class App(ctk.CTk):
         if pin_manager.verify_pin(pin):
             self.login_frame.grid_forget()
             self.menu_frame.grid(row=0, column=0, sticky="nsew")
-            self.state('zoomed') # Passe en plein écran (maximisé) après le login
             self._update_dashboard_kpis()
         else:
             self.pin_entry.delete(0, 'end')
@@ -193,27 +206,40 @@ class App(ctk.CTk):
         settings_window.transient(self)
         settings_window.grab_set()
 
-        settings_window.grid_columnconfigure(0, weight=1)
+        # --- Cadre principal avec barre de défilement ---
+        scroll_frame = ctk.CTkScrollableFrame(settings_window, label_text="Réglages")
+        scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        ctk.CTkLabel(settings_window, text="Personnalisation", font=self.font_large).pack(pady=(20, 10))
-        ctk.CTkButton(settings_window, text="Modifier les informations des PDF", font=self.font_button, command=self._open_pdf_settings_window).pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Changer le code PIN", font=self.font_button, command=self._open_change_pin_window).pack(pady=10, padx=40, fill="x")
+        ctk.CTkLabel(scroll_frame, text="Personnalisation", font=self.font_large).pack(pady=(10, 10), anchor="w", padx=20)
+        ctk.CTkButton(scroll_frame, text="Modifier les informations des PDF", font=self.font_button, command=self._open_pdf_settings_window).pack(pady=10, padx=20, fill="x")
+        ctk.CTkButton(scroll_frame, text="Changer le code PIN", font=self.font_button, command=self._open_change_pin_window).pack(pady=10, padx=20, fill="x")
 
-        ctk.CTkLabel(settings_window, text="Outils de Maintenance", font=self.font_large).pack(pady=(20, 10))
-        ctk.CTkLabel(settings_window, text="Ces outils permettent de corriger des problèmes de données.", font=self.font_regular).pack(pady=(0, 10))
+        ctk.CTkLabel(scroll_frame, text="Gestion des Données", font=self.font_large).pack(pady=(20, 10), anchor="w", padx=20)
+        ctk.CTkButton(scroll_frame, text="Ouvrir le dossier de l'application", font=self.font_button, command=self._open_app_directory).pack(pady=10, padx=20, fill="x")
+
+        ctk.CTkLabel(scroll_frame, text="Outils de Maintenance", font=self.font_large).pack(pady=(20, 10), anchor="w", padx=20)
+        ctk.CTkLabel(scroll_frame, text="Ces outils permettent de corriger des problèmes de données.", font=self.font_regular).pack(pady=(0, 10), padx=20, anchor="w")
         
-        ctk.CTkButton(settings_window, text="Régénérer les PDF des factures", font=self.font_button, command=self._regenerate_all_invoice_pdfs).pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Regénérer les fichiers Excel des factures", font=self.font_button, command=self._regenerate_all_invoices_excel).pack(pady=10, padx=40, fill="x")
+        ctk.CTkButton(scroll_frame, text="Régénérer les PDF des factures", font=self.font_button, command=self._regenerate_all_invoice_pdfs).pack(pady=10, padx=20, fill="x")
+        ctk.CTkButton(scroll_frame, text="Regénérer les fichiers Excel des factures", font=self.font_button, command=self._regenerate_all_invoices_excel).pack(pady=10, padx=20, fill="x")
 
-        ctk.CTkLabel(settings_window, text="Zone de Danger", font=self.font_large, text_color="#E53935").pack(pady=(20, 10))
-        ctk.CTkLabel(settings_window, text="Ces actions sont irréversibles.", font=self.font_regular).pack(pady=(0, 20))
+        ctk.CTkLabel(scroll_frame, text="Zone de Danger", font=self.font_large, text_color="#E53935").pack(pady=(20, 10), anchor="w", padx=20)
+        ctk.CTkLabel(scroll_frame, text="Ces actions sont irréversibles.", font=self.font_regular).pack(pady=(0, 20), padx=20, anchor="w")
 
         danger_button_color = "#D32F2F"
         danger_hover_color = "#B71C1C"
-        ctk.CTkButton(settings_window, text="Supprimer TOUTES les données", font=self.font_button, command=self._delete_all_data, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Supprimer toutes les FACTURES", font=self.font_button, command=self._delete_invoices, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Supprimer tous les FRAIS", font=self.font_button, command=self._delete_expenses, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
-        ctk.CTkButton(settings_window, text="Supprimer tous les budgets", font=self.font_button, command=self._delete_budgets, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=40, fill="x")
+        ctk.CTkButton(scroll_frame, text="Supprimer TOUTES les données", font=self.font_button, command=self._delete_all_data, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
+        ctk.CTkButton(scroll_frame, text="Supprimer toutes les FACTURES", font=self.font_button, command=self._delete_invoices, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
+        ctk.CTkButton(scroll_frame, text="Supprimer tous les FRAIS", font=self.font_button, command=self._delete_expenses, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
+        ctk.CTkButton(scroll_frame, text="Supprimer tous les budgets", font=self.font_button, command=self._delete_budgets, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
+
+    def _open_app_directory(self):
+        """Ouvre le dossier racine de l'application."""
+        import shutil # Lazy import
+        try:
+            os.startfile(config.BASE_DIR)
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible d'ouvrir le dossier de l'application:\n{e}")
 
     def _open_pdf_settings_window(self):
         """Ouvre la fenêtre de modification des informations PDF."""
@@ -375,6 +401,7 @@ class App(ctk.CTk):
 
     def _delete_directory(self, dir_path, dir_name):
         if messagebox.askyesno("Confirmation", f"Êtes-vous sûr de vouloir supprimer définitivement le dossier '{dir_name}' et tout son contenu ?"):
+            import shutil
             try:
                 if os.path.exists(dir_path):
                     shutil.rmtree(dir_path)
@@ -384,6 +411,7 @@ class App(ctk.CTk):
 
     def _delete_all_data(self):
         if messagebox.askyesno("Confirmation FINALE", "ATTENTION : Vous êtes sur le point de supprimer TOUTES les données (factures, frais, budgets, sauvegardes).\n\nCette action est IRREVERSIBLE.\n\nContinuer ?"):
+            import shutil
             dirs_to_delete = { "factures": config.FACTURES_DIR, "frais": config.FRAIS_DIR, "budget": config.BUDGET_DIR, "backups": config.BACKUPS_DIR }
             for name, path in dirs_to_delete.items():
                 try:
@@ -401,6 +429,8 @@ class App(ctk.CTk):
         if not messagebox.askyesno("Confirmation", "Cette opération va lire toutes vos factures, sauvegarder les fichiers Excel actuels, puis les recréer.\n\nCela peut corriger des erreurs de formatage ou de colonnes manquantes. L'opération peut prendre un certain temps.\n\nContinuer ?"):
             return
 
+        from .data_manager import load_all_data, get_available_years, backup_database, save_to_excel
+        import pandas as pd
         self._show_status_message("Démarrage de la regénération des fichiers Excel...")
         self.update_idletasks() # Force UI update
 
@@ -437,6 +467,7 @@ class App(ctk.CTk):
         cache_key = str(year) if year else "all"
         if cache_key in self.data_cache:
             return self.data_cache[cache_key]
+        from .data_manager import load_year_data, load_all_data
 
         if year:
             df = load_year_data(year)
@@ -486,8 +517,9 @@ class App(ctk.CTk):
         time_label = ctk.CTkLabel(progress_window, text="Temps restant estimé : calcul...")
         time_label.pack(pady=5)
 
-        # Lancement de la régénération dans un thread séparé pour ne pas bloquer l'UI
-        thread = threading.Thread(target=self._regenerate_pdfs_worker, args=(invoices_to_process,))
+        # Lancement de la régénération dans un thread séparé pour ne pas bloquer l'UI.
+        # On le met en "daemon" pour qu'il ne bloque pas la fermeture de l'application.
+        thread = threading.Thread(target=self._regenerate_pdfs_worker, args=(invoices_to_process,), daemon=True)
         thread.start()
 
         # Démarrage du moniteur de progression
@@ -496,6 +528,9 @@ class App(ctk.CTk):
     def _regenerate_pdfs_worker(self, invoices_to_process):
         """Tâche de fond pour la régénération des PDF."""
         try:
+            import pandas as pd
+            from .pdf_generator import generate_pdf
+
             for i, invoice_data in enumerate(invoices_to_process):
                 clean_data = {k: v for k, v in invoice_data.items() if pd.notna(v)}
                 
@@ -548,14 +583,15 @@ class App(ctk.CTk):
     def _display_invoices_in_frame(self, dataframe, label):
         """Vide et remplit le cadre de résultats avec les factures d'un dataframe."""
         self.current_search_results_df = dataframe
+        
         for widget in self.results_frame.winfo_children():
             widget.destroy()
         
         self.results_frame.configure(label_text=label)
 
-        if dataframe.empty:
+        if dataframe is None or dataframe.empty:
             # Affiche un message différent si la recherche n'a pas encore été lancée
-            if label == "Utilisez les filtres pour lancer une recherche":
+            if label == "Utilisez les filtres pour lancer une recherche" or dataframe is None:
                 message = "🔎\nUtilisez les filtres ci-dessus et cliquez sur 'Appliquer' pour commencer."
             else:
                 message = "🧐\nAucune facture ne correspond à votre recherche."
@@ -646,6 +682,7 @@ class App(ctk.CTk):
 
         # Chargement paresseux (lazy loading) des onglets
         if wrapper == self.new_invoice_wrapper and not self.is_new_invoice_tab_initialized:
+            from .new_invoice_tab import create_new_invoice_tab
             create_new_invoice_tab(self)
             # Initialise le formulaire après sa création
             self.prestation.set("Consultation adulte")
@@ -653,15 +690,19 @@ class App(ctk.CTk):
             self._toggle_payment_date_field()
             self.is_new_invoice_tab_initialized = True
         elif wrapper == self.search_wrapper and not self.is_search_tab_initialized:
+            from .search_tab import create_search_tab
             create_search_tab(self)
             self.is_search_tab_initialized = True
         elif wrapper == self.budget_wrapper and not self.is_budget_tab_initialized:
+            from .budget_tab import create_budget_tab, calculate_budget
             create_budget_tab(self)
             self.is_budget_tab_initialized = True
         elif wrapper == self.expenses_wrapper and not self.is_expenses_tab_initialized:
+            from .expenses_tab import create_expenses_tab, refresh_expenses_list
             create_expenses_tab(self)
             self.is_expenses_tab_initialized = True
         elif wrapper == self.attestation_wrapper and not self.is_attestation_tab_initialized:
+            from .attestation_tab import create_attestation_tab
             create_attestation_tab(self)
             self.is_attestation_tab_initialized = True
 
@@ -670,9 +711,11 @@ class App(ctk.CTk):
         if wrapper == self.expenses_wrapper:
             refresh_expenses_list(self)
         elif wrapper == self.search_wrapper:
+            import pandas as pd
             # N'affiche rien par défaut pour éviter de charger des milliers de factures.
             self._display_invoices_in_frame(pd.DataFrame(), "Utilisez les filtres pour lancer une recherche")
         elif wrapper == self.budget_wrapper:
+            from .budget_tab import calculate_budget
             calculate_budget(self)
 
     def _show_menu(self):
@@ -687,6 +730,9 @@ class App(ctk.CTk):
     def _update_dashboard_kpis(self):
         """Calcule et met à jour les indicateurs clés et le graphique du tableau de bord."""
         try:
+            import pandas as pd
+            from .data_manager import load_expenses, MONTHS_FR
+
             now = datetime.now()
             self._invalidate_data_cache()
             invoices_df = self._load_data_with_cache()
@@ -734,85 +780,12 @@ class App(ctk.CTk):
             self.kpi_unpaid_label.configure(text=f"{unpaid_total:,.2f} €".replace(",", " "))
             self.kpi_expenses_label.configure(text=f"{expenses_month:,.2f} €".replace(",", " "))
             self.kpi_unpaid_label.configure(text_color="#e74c3c" if unpaid_total > 0 else ("#1E1E1E", "#E0E0E0"))
-
-            # Update Chart
-            self._update_dashboard_chart(chart_labels, chart_values)
-
         except Exception as e:
             print(f"Erreur lors de la mise à jour du tableau de bord : {e}")
 
-    def _update_dashboard_chart(self, labels, values):
-        """Affiche un graphique à barres du CA des 6 derniers mois."""
-        self.dashboard_fig = None # Réinitialise la figure pour l'exportation
-        if self.dashboard_chart_canvas:
-            self.dashboard_chart_canvas.get_tk_widget().destroy()
-
-        try:
-            is_dark = ctk.get_appearance_mode() == "Dark"
-            bg_color = "#2B2B2B" if is_dark else "#F9F9FA"
-            text_color = "white" if is_dark else "black"
-            bar_color = "#3498db"
-
-            fig, ax = plt.subplots(figsize=(5, 2.5), dpi=100)
-            fig.patch.set_facecolor(bg_color)
-            ax.set_facecolor(bg_color)
-
-            # Change le type de graphique en courbe (plot)
-            ax.plot(labels, values, color=bar_color, marker='o', linestyle='-')
-            ax.fill_between(labels, values, color=bar_color, alpha=0.2) # Ajoute une zone remplie sous la courbe
-            
-            ax.set_title("CA (encaissé) des 6 derniers mois", color=text_color, fontsize=12)
-            ax.set_ylabel("Montant (€)", color=text_color, fontsize=10)
-            
-            ax.tick_params(axis='y', colors=text_color, labelsize=8)
-            ax.tick_params(axis='x', colors=text_color, labelsize=9, rotation=0)
-            
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['bottom'].set_color(text_color)
-            ax.spines['left'].set_color(text_color)
-
-            for i, v in enumerate(values):
-                if v > 0:
-                    ax.text(i, v + (max(values) * 0.02 if any(values) else 1), f"{int(v)}€", ha='center', va='bottom', color=text_color, fontsize=8)
-
-            fig.tight_layout(pad=0.5)
-
-            self.dashboard_fig = fig # Sauvegarde la figure pour l'export
-
-            self.dashboard_chart_canvas = FigureCanvasTkAgg(fig, master=self.dashboard_chart_frame)
-            self.dashboard_chart_canvas.draw()
-            self.dashboard_chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
-        except Exception as e:
-            print(f"Erreur graphique dashboard: {e}")
-
-    def _export_dashboard_chart(self):
-        """Exporte le graphique du tableau de bord en tant qu'image."""
-        if not self.dashboard_fig:
-            messagebox.showwarning("Export impossible", "Le graphique n'a pas encore été généré.")
-            return
-
-        try:
-            filepath = filedialog.asksaveasfilename(
-                defaultextension=".png",
-                filetypes=[("Image PNG", "*.png"), ("Image JPG", "*.jpg"), ("Tous les fichiers", "*.*")],
-                initialfile=f"Graphique_CA_{datetime.now().strftime('%Y-%m')}.png",
-                title="Enregistrer le graphique"
-            )
-
-            if not filepath:
-                return # L'utilisateur a annulé
-
-            # Sauvegarde la figure en utilisant la couleur de fond actuelle pour éviter un fond noir sur le JPG
-            self.dashboard_fig.savefig(filepath, dpi=300, bbox_inches='tight', facecolor=self.dashboard_fig.get_facecolor())
-            
-            self._show_status_message(f"Graphique exporté vers {os.path.basename(filepath)}")
-            messagebox.showinfo("Succès", f"Le graphique a été exporté avec succès vers :\n{filepath}")
-        except Exception as e:
-            messagebox.showerror("Erreur d'export", f"Une erreur est survenue lors de l'exportation du graphique :\n{e}")
-
     def _on_kpi_click(self, kpi_name):
         """Gère le clic sur un indicateur du tableau de bord."""
+        from .data_manager import MONTHS_FR
         now = datetime.now()
         current_year = str(now.year)
         current_month = MONTHS_FR[now.month - 1]
@@ -842,6 +815,7 @@ class App(ctk.CTk):
 
     def _open_invoice_folder(self, invoice_data):
         """Ouvre le dossier contenant le PDF de la facture."""
+        from .data_manager import get_invoice_path
         folder_path = get_invoice_path(invoice_data, get_folder=True)
         
         if not os.path.isdir(folder_path):
@@ -855,6 +829,7 @@ class App(ctk.CTk):
 
     def _open_invoice_pdf_externally(self, invoice_data):
         """Ouvre le fichier PDF de la facture."""
+        from .data_manager import get_invoice_path
         pdf_path = get_invoice_path(invoice_data)
         
         if not os.path.exists(pdf_path):
@@ -885,6 +860,7 @@ class App(ctk.CTk):
         """Demande confirmation et supprime la facture."""
         confirm = messagebox.askyesno("Confirmation", f"Voulez-vous vraiment supprimer la facture {invoice_data['ID']} ?\nCette action supprimera la ligne du fichier Excel (le PDF reste conservé).")
         if confirm:
+            from .data_manager import delete_invoice
             success = delete_invoice(invoice_data)
             if success:
                 self._invalidate_data_cache()
@@ -896,6 +872,9 @@ class App(ctk.CTk):
 
     def _apply_filters_and_search(self):
         """Applique tous les filtres de l'onglet recherche et affiche les résultats."""
+        import pandas as pd
+        from .data_manager import MONTHS_FR
+
         year = self.search_year_var.get()
         month = self.search_month_var.get()
         prestation = self.search_prestation_var.get()
@@ -992,6 +971,8 @@ class App(ctk.CTk):
 
     def _view_invoice_pdf(self, invoice_data):
         """Ouvre le visualiseur de PDF interne."""
+        from .data_manager import get_invoice_path
+        from .pdf_viewer import PDFViewer
         pdf_path = get_invoice_path(invoice_data)
         if not os.path.exists(pdf_path):
             messagebox.showwarning("Fichier introuvable", f"Le fichier PDF n'a pas été trouvé:\n{pdf_path}")
@@ -1080,6 +1061,7 @@ class App(ctk.CTk):
 
     def _open_calendar(self, entry_widget, make_readonly=True):
         """Ouvre une fenêtre Toplevel avec un calendrier pour sélectionner une date."""
+        from tkcalendar import Calendar
         if hasattr(self, '_calendar_toplevel') and self._calendar_toplevel is not None and self._calendar_toplevel.winfo_exists():
             self._calendar_toplevel.focus()
             return
@@ -1157,6 +1139,8 @@ class App(ctk.CTk):
     def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, new_child_dob, regen_pdf, window):
         """Met à jour le statut dans le fichier Excel et régénère le PDF si demandé."""
         try:
+            import pandas as pd
+            from .data_manager import MONTHS_FR, backup_database
             invoice_date_str = invoice_data.get('Date')
             if not invoice_date_str:
                 messagebox.showerror("Erreur", "Date de facture manquante, mise à jour impossible.", parent=window)
@@ -1212,6 +1196,7 @@ class App(ctk.CTk):
                         # Si ce n'est pas une liste, on la supprime pour éviter une erreur PDF
                         del clean_data['Membres_Famille']
 
+                from .pdf_generator import generate_pdf
                 pdf_file = generate_pdf(clean_data, is_duplicate=True)
                 messagebox.showinfo("Succès", f"Statut mis à jour et PDF régénéré:\n{pdf_file}", parent=window)
             else:
@@ -1225,6 +1210,8 @@ class App(ctk.CTk):
 
     def _show_success_dialog(self, pdf_path):
         """Affiche une boîte de dialogue de succès avec des options pour ouvrir le fichier/dossier."""
+        import webbrowser
+        from .pdf_viewer import PDFViewer
         dialog = ctk.CTkToplevel(self)
         dialog.title("Succès")
         dialog.geometry("400x420")
@@ -1303,6 +1290,7 @@ class App(ctk.CTk):
         }
 
         try:
+            from .pdf_generator import generate_attestation_pdf
             pdf_path = generate_attestation_pdf(data)
             self._show_success_dialog(pdf_path)
             self.attestation_patient_name.delete(0, 'end') # Vide le nom pour la prochaine
@@ -1370,6 +1358,9 @@ class App(ctk.CTk):
 
     def valider(self):
         try:
+            from .data_manager import get_yearly_invoice_count, save_to_excel
+            from .pdf_generator import generate_pdf
+
             if not self.nom.get() or not self.montant.get():
                 messagebox.showwarning("Champs requis", "Veuillez remplir les champs Nom et Montant.")
                 return

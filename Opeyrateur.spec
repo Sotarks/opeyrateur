@@ -1,12 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
     datas=[('src', 'src')],
-    hiddenimports=[],
+    hiddenimports=['fitz', 'PyMuPDF', 'babel.numbers'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

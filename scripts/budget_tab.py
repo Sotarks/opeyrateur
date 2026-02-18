@@ -1,53 +1,70 @@
 import customtkinter as ctk
 from datetime import datetime
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import filedialog, messagebox
 import os
 from . import config
-from .data_manager import get_available_years, load_year_data, MONTHS_FR
-from .pdf_generator import generate_budget_report
 
 def create_budget_tab(app):
     """Crée les widgets pour l'onglet 'Budget'."""
     app.budget_tab.grid_columnconfigure(0, weight=1)
     
-    # --- Frame de sélection ---
-    selection_frame = ctk.CTkFrame(app.budget_tab, corner_radius=10)
-    selection_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
-    selection_frame.grid_columnconfigure((0, 1), weight=1)
+    # --- Cadre principal pour les contrôles ---
+    controls_frame = ctk.CTkFrame(app.budget_tab, corner_radius=10)
+    controls_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+    controls_frame.grid_columnconfigure((0, 1), weight=1)
 
-    ctk.CTkLabel(selection_frame, text="Période", font=app.font_large).grid(row=0, column=0, columnspan=2, pady=(10, 5), padx=10, sticky="w")
+    # --- Colonne de gauche pour les filtres ---
+    filter_frame = ctk.CTkFrame(controls_frame, fg_color="transparent")
+    filter_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+    filter_frame.grid_columnconfigure(0, weight=1)
+
+    ctk.CTkLabel(filter_frame, text="Période", font=app.font_large).pack(anchor="w", pady=(0, 5))
 
     # Type de vue (Année ou Mois)
-    app.budget_view_type = ctk.CTkSegmentedButton(selection_frame, values=["Année", "Mois"], command=lambda v: _update_budget_inputs(app))
-    app.budget_view_type.grid(row=1, column=0, columnspan=2, pady=5)
+    app.budget_view_type = ctk.CTkSegmentedButton(filter_frame, values=["Année", "Mois", "Période"], command=lambda v: _update_budget_inputs(app))
+    app.budget_view_type.pack(fill="x", pady=5)
     app.budget_view_type.set("Mois")
+
+    # Frame pour les menus déroulants
+    dropdown_frame = ctk.CTkFrame(filter_frame, fg_color="transparent")
+    dropdown_frame.pack(fill="x", pady=5)
+    dropdown_frame.grid_columnconfigure((0, 1), weight=1)
+    dropdown_frame.grid_rowconfigure((0, 1), weight=0)
 
     # Dropdowns pour Année et Mois
     app.budget_year_var = ctk.StringVar()
     app.budget_month_var = ctk.StringVar()
+    app.budget_start_month_var = ctk.StringVar()
+    app.budget_end_month_var = ctk.StringVar()
     
+    from .data_manager import get_available_years, MONTHS_FR
     years = get_available_years()
     if not years:
         years = [str(datetime.now().year)]
     app.budget_year_var.set(years[0])
-    app.budget_month_var.set(MONTHS_FR[datetime.now().month - 1])
+    current_month_name = MONTHS_FR[datetime.now().month - 1]
+    app.budget_month_var.set(current_month_name)
+    app.budget_start_month_var.set(current_month_name)
+    app.budget_end_month_var.set(current_month_name)
 
-    app.budget_year_menu = ctk.CTkOptionMenu(selection_frame, variable=app.budget_year_var, values=years)
+    app.budget_year_menu = ctk.CTkOptionMenu(dropdown_frame, variable=app.budget_year_var, values=years)
     # Le placement grid sera géré par _update_budget_inputs
 
-    app.budget_month_menu = ctk.CTkOptionMenu(selection_frame, variable=app.budget_month_var, values=MONTHS_FR)
+    app.budget_month_menu = ctk.CTkOptionMenu(dropdown_frame, variable=app.budget_month_var, values=MONTHS_FR)
     # Le placement grid sera géré par _update_budget_inputs
+    
+    app.budget_start_month_menu = ctk.CTkOptionMenu(dropdown_frame, variable=app.budget_start_month_var, values=MONTHS_FR)
+    app.budget_end_month_menu = ctk.CTkOptionMenu(dropdown_frame, variable=app.budget_end_month_var, values=MONTHS_FR)
 
-    # Bouton Calculer
-    ctk.CTkButton(selection_frame, text="Calculer", command=lambda: calculate_budget(app), font=app.font_button).grid(row=3, column=0, columnspan=2, pady=(10, 5), padx=20, sticky="ew")
+    # --- Colonne de droite pour les actions ---
+    actions_frame = ctk.CTkFrame(controls_frame, fg_color="transparent")
+    actions_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+    actions_frame.grid_columnconfigure(0, weight=1)
+    actions_frame.grid_rowconfigure((0, 1, 2), weight=0)
 
-    # Boutons Exporter
-    ctk.CTkButton(selection_frame, text="Générer Excel", command=lambda: _export_budget(app), fg_color="#34D399", hover_color="#10B981", font=app.font_button).grid(row=4, column=0, padx=(20, 5), pady=(5, 10), sticky="ew")
-    ctk.CTkButton(selection_frame, text="Générer PDF (Vue actuelle)", command=lambda: _export_budget_pdf(app), fg_color="#D32F2F", hover_color="#B71C1C", font=app.font_button).grid(row=4, column=1, padx=(5, 20), pady=(5, 10), sticky="ew")
-    ctk.CTkButton(selection_frame, text="Générer PDF (Registre annuel)", command=lambda: _export_annual_report(app), fg_color="#D32F2F", hover_color="#B71C1C", font=app.font_button).grid(row=5, column=0, columnspan=2, padx=20, pady=(0, 10), sticky="ew")
+    ctk.CTkButton(actions_frame, text="Calculer", command=lambda: calculate_budget(app), font=app.font_button, height=40).pack(fill="x", pady=5)
+    ctk.CTkButton(actions_frame, text="Visualiser PDF (Vue actuelle)", command=lambda: _view_budget_pdf(app), font=app.font_button, height=40).pack(fill="x", pady=5)
+    ctk.CTkButton(actions_frame, text="Générer Excel", command=lambda: _export_budget(app), fg_color="#34D399", hover_color="#10B981", font=app.font_button, height=40).pack(fill="x", pady=5)
 
     # --- Frame Résultats ---
     results_frame = ctk.CTkFrame(app.budget_tab, corner_radius=10)
@@ -75,15 +92,24 @@ def create_budget_tab(app):
 def _update_budget_inputs(app):
     """Affiche ou masque le menu des mois selon la vue choisie."""
     view_type = app.budget_view_type.get()
+    app.budget_month_menu.grid_forget()
+    app.budget_start_month_menu.grid_forget()
+    app.budget_end_month_menu.grid_forget()
     if view_type == "Année":
-        app.budget_month_menu.grid_forget()
-        app.budget_year_menu.grid(row=2, column=0, columnspan=2, padx=20, pady=10, sticky="ew")
-    else:
-        app.budget_year_menu.grid(row=2, column=0, columnspan=1, padx=5, pady=10, sticky="ew")
-        app.budget_month_menu.grid(row=2, column=1, padx=5, pady=10, sticky="ew")
+        app.budget_year_menu.grid(row=0, column=0, columnspan=2, padx=0, pady=0, sticky="ew")
+    elif view_type == "Mois":
+        app.budget_year_menu.grid(row=0, column=0, columnspan=1, padx=(0, 5), pady=0, sticky="ew")
+        app.budget_month_menu.grid(row=0, column=1, padx=(5, 0), pady=0, sticky="ew")
+    elif view_type == "Période":
+        app.budget_year_menu.grid(row=0, column=0, columnspan=2, padx=0, pady=(0, 5), sticky="ew")
+        app.budget_start_month_menu.grid(row=1, column=0, padx=(0, 5), pady=0, sticky="ew")
+        app.budget_end_month_menu.grid(row=1, column=1, padx=(5, 0), pady=0, sticky="ew")
 
 def calculate_budget(app):
     """Calcule et affiche les statistiques."""
+    import pandas as pd
+    from .data_manager import load_year_data, MONTHS_FR
+
     year = app.budget_year_var.get()
     view_type = app.budget_view_type.get()
     
@@ -117,6 +143,21 @@ def calculate_budget(app):
             except Exception as e:
                 print(f"Erreur lors du filtrage par date: {e}")
                 df_stats = pd.DataFrame()
+        elif view_type == "Période":
+            start_month_name = app.budget_start_month_var.get()
+            end_month_name = app.budget_end_month_var.get()
+            try:
+                start_month_index = MONTHS_FR.index(start_month_name) + 1
+                end_month_index = MONTHS_FR.index(end_month_name) + 1
+                
+                if start_month_index > end_month_index:
+                    messagebox.showwarning("Période invalide", "Le mois de début ne peut pas être après le mois de fin.")
+                    return 
+
+                months_in_range = range(start_month_index, end_month_index + 1)
+                df_stats = df_stats[df_stats['DateObj'].dt.month.isin(months_in_range)]
+            except Exception as e:
+                print(f"Erreur lors du filtrage par période: {e}")
 
         count = len(df_stats)
         if 'Montant' in df_stats.columns:
@@ -133,6 +174,11 @@ def calculate_budget(app):
 
 def _update_chart(app, df):
     """Affiche un graphique de l'évolution du CA sur l'année."""
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from .data_manager import MONTHS_FR
+
     # Nettoie le graphique précédent
     for widget in app.chart_frame.winfo_children():
         widget.destroy()
@@ -173,16 +219,29 @@ def _export_budget(app):
     if not hasattr(app, 'current_budget_df') or app.current_budget_df.empty:
         messagebox.showwarning("Export", "Aucune donnée à exporter.")
         return
+    
+    from .data_manager import MONTHS_FR
 
     # Création du dossier 'budget' s'il n'existe pas
     os.makedirs(config.BUDGET_DIR, exist_ok=True)
 
     # Nommage automatique du fichier
     year = app.budget_year_var.get()
-    if app.budget_view_type.get() == "Mois":
+    view_type = app.budget_view_type.get()
+    if view_type == "Mois":
         month = app.budget_month_var.get()
         filename = f"Budget_{year}_{month}.xlsx"
-    else:
+    elif view_type == "Période":
+        start_month_name = app.budget_start_month_var.get()
+        end_month_name = app.budget_end_month_var.get()
+        start_month_index = MONTHS_FR.index(start_month_name)
+        end_month_index = MONTHS_FR.index(end_month_name)
+        if start_month_index > end_month_index:
+            messagebox.showwarning("Période invalide", "Le mois de début ne peut pas être après le mois de fin.")
+            return
+
+        filename = f"Budget_{year}_{start_month_name[:3]}-{end_month_name[:3]}.xlsx"
+    else: # Année
         filename = f"Budget_{year}.xlsx"
     
     full_path = os.path.join(config.BUDGET_DIR, filename)
@@ -201,42 +260,42 @@ def _export_budget(app):
     except Exception as e:
         messagebox.showerror("Erreur", f"Impossible d'exporter : {e}")
 
-def _export_budget_pdf(app):
-    """Exporte les données affichées vers un fichier PDF."""
+def _view_budget_pdf(app):
+    """Génère et affiche le PDF du budget pour la vue actuelle."""
     if not hasattr(app, 'current_budget_df') or app.current_budget_df.empty:
-        messagebox.showwarning("Export", "Aucune donnée à exporter.")
+        messagebox.showwarning("Visualisation", "Aucune donnée à visualiser.")
         return
+    
+    from .data_manager import MONTHS_FR
+    from .pdf_generator import generate_budget_report
+    from .pdf_viewer import PDFViewer
 
     year = app.budget_year_var.get()
     month = None
-    if app.budget_view_type.get() == "Mois":
+    quarter = None
+    view_type = app.budget_view_type.get()
+    
+    download_filename = f"Registre_Recettes_{year}"
+
+    if view_type == "Mois":
         month = app.budget_month_var.get()
+        download_filename += f"_{month}"
+    elif view_type == "Période":
+        start_month_name = app.budget_start_month_var.get()
+        end_month_name = app.budget_end_month_var.get()
+        start_month_index = MONTHS_FR.index(start_month_name)
+        end_month_index = MONTHS_FR.index(end_month_name)
+        if start_month_index > end_month_index:
+            messagebox.showwarning("Période invalide", "Le mois de début ne peut pas être après le mois de fin.")
+            return
+
+        quarter = f"{start_month_name} à {end_month_name}" # For PDF title
+        download_filename += f"_{start_month_name[:3]}-{end_month_name[:3]}"
+
+    download_filename += ".pdf"
 
     try:
-        path = generate_budget_report(year, month, app.current_budget_df)
-        messagebox.showinfo("Succès", f"Export PDF réussi :\n{path}")
-        os.startfile(os.path.dirname(path))
+        path = generate_budget_report(year, month, quarter, app.current_budget_df)
+        PDFViewer(app, path, download_filename=download_filename)
     except Exception as e:
-        messagebox.showerror("Erreur", f"Impossible d'exporter en PDF : {e}")
-
-def _export_annual_report(app):
-    """Génère et exporte le registre des recettes pour toute l'année sélectionnée."""
-    year = app.budget_year_var.get()
-    
-    # Charge les données de l'année entière
-    df_year = load_year_data(year)
-    
-    # Filtre les impayés
-    if not df_year.empty and 'Methode_Paiement' in df_year.columns:
-        df_year = df_year[df_year['Methode_Paiement'] != 'Impayé'].copy()
-    
-    if df_year.empty:
-        messagebox.showwarning("Export", f"Aucune facture payée trouvée pour l'année {year}.")
-        return
-
-    try:
-        path = generate_budget_report(year, None, df_year)
-        messagebox.showinfo("Succès", f"Registre annuel généré :\n{path}")
-        os.startfile(os.path.dirname(path))
-    except Exception as e:
-        messagebox.showerror("Erreur", f"Impossible de générer le registre : {e}")
+        messagebox.showerror("Erreur", f"Impossible de visualiser le PDF : {e}")

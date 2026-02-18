@@ -4,10 +4,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
 import shutil
-import pandas as pd
-from .data_manager import save_expense, load_expenses, delete_expense
 from . import config
-from .pdf_generator import generate_expenses_report
 
 def create_expenses_tab(app):
     """Crée les widgets pour l'onglet 'Frais'."""
@@ -124,6 +121,7 @@ def _select_proof(app):
 
 def _add_expense(app):
     try:
+        from .data_manager import save_expense
         montant = float(app.expense_amount.get().replace(',', '.'))
         data = {
             "Date": app.expense_date.get(),
@@ -145,6 +143,9 @@ def _add_expense(app):
         messagebox.showerror("Erreur", "Montant invalide.")
 
 def refresh_expenses_list(app):
+    import pandas as pd
+    from .data_manager import load_expenses
+
     # Vide le tableau
     for item in app.expenses_tree.get_children():
         app.expenses_tree.delete(item)
@@ -170,6 +171,9 @@ def refresh_expenses_list(app):
             app.expenses_tree.insert("", "end", values=(row["Date"], row["Categorie"], row["Description"], f"{row['Montant']:.2f} €", proof_status, proof_path, expense_id))
 
 def _generate_pdf_report(app):
+    from .data_manager import load_expenses
+    from .pdf_generator import generate_expenses_report
+
     current_year = datetime.now().year
     df = load_expenses(current_year)
     if df.empty:
@@ -209,6 +213,8 @@ def _open_proof(app):
 
 def _confirm_delete_expense(app):
     """Supprime la dépense sélectionnée."""
+    from .data_manager import delete_expense
+
     selected_item = app.expenses_tree.selection()
     if not selected_item:
         return
@@ -280,6 +286,7 @@ def _prepare_edit_expense(app):
 
 def _update_expense(app):
     """Supprime l'ancienne dépense et ajoute la nouvelle."""
+    from .data_manager import delete_expense
     if app.expense_to_edit:
         delete_expense(app.expense_to_edit)
     

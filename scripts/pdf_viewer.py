@@ -2,15 +2,16 @@ import customtkinter as ctk
 import tkinter as tk
 import fitz  # PyMuPDF
 from PIL import Image, ImageTk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import os
+import shutil
 
 class PDFViewer(ctk.CTkToplevel):
     """
     Une fenêtre Toplevel pour afficher un fichier PDF avec des contrôles de base.
     Nécessite PyMuPDF (fitz) et Pillow.
     """
-    def __init__(self, parent, pdf_path):
+    def __init__(self, parent, pdf_path, download_filename=None):
         super().__init__(parent)
         self.title(f"Visualiseur PDF - {os.path.basename(pdf_path)}")
         self.geometry("800x1000")
@@ -18,6 +19,7 @@ class PDFViewer(ctk.CTkToplevel):
         self.grab_set()
 
         self.pdf_path = pdf_path
+        self.download_filename = download_filename
         self.pdf_document = None
         self.current_page = 0
         self.total_pages = 0
@@ -46,6 +48,10 @@ class PDFViewer(ctk.CTkToplevel):
         # --- Right side (packed in reverse order of appearance) ---
         self.open_folder_button = ctk.CTkButton(controls_frame, text="Ouvrir le dossier", command=self._open_containing_folder)
         self.open_folder_button.pack(side="right", padx=(20, 5))
+
+        if self.download_filename:
+            self.download_button = ctk.CTkButton(controls_frame, text="Télécharger", command=self._download_pdf)
+            self.download_button.pack(side="right", padx=(5, 5))
 
         ctk.CTkButton(controls_frame, text="+", width=30, command=self.zoom_in).pack(side="right", padx=5)
         self.zoom_label = ctk.CTkLabel(controls_frame, text="100%")
@@ -110,6 +116,27 @@ class PDFViewer(ctk.CTkToplevel):
         if self.pdf_document:
             self.pdf_document.close()
         self.destroy()
+
+    def _download_pdf(self):
+        """Ouvre une boîte de dialogue pour enregistrer le PDF actuel."""
+        if not self.download_filename:
+            return
+
+        try:
+            filepath = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("Fichiers PDF", "*.pdf"), ("Tous les fichiers", "*.*")],
+                initialfile=self.download_filename,
+                title="Enregistrer le rapport PDF"
+            )
+
+            if not filepath:
+                return # User cancelled
+
+            shutil.copy2(self.pdf_path, filepath)
+            messagebox.showinfo("Succès", f"Le fichier a été téléchargé avec succès vers :\n{filepath}", parent=self)
+        except Exception as e:
+            messagebox.showerror("Erreur de téléchargement", f"Une erreur est survenue :\n{e}", parent=self)
 
     def _open_containing_folder(self):
         """Ouvre le dossier contenant le PDF actuel."""
