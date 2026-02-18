@@ -64,3 +64,17 @@ def create_search_tab(app):
     # --- Cadre des résultats ---
     app.results_frame = ctk.CTkScrollableFrame(app.search_tab, label_text="Résultats", label_font=ctk.CTkFont(size=14, weight="bold"), corner_radius=10)
     app.results_frame.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="nsew")
+
+    # --- Pagination ---
+    app.pagination_frame = ctk.CTkFrame(app.search_tab, fg_color="transparent", height=40)
+    app.pagination_frame.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="ew")
+    app.pagination_frame.grid_columnconfigure((0, 2), weight=1)
+
+    app.btn_prev_page = ctk.CTkButton(app.pagination_frame, text="< Précédent", width=120, command=app._prev_page, state="disabled")
+    app.btn_prev_page.grid(row=0, column=0, sticky="w")
+
+    app.lbl_page_info = ctk.CTkLabel(app.pagination_frame, text="Page 1 / 1", font=app.font_bold)
+    app.lbl_page_info.grid(row=0, column=1)
+
+    app.btn_next_page = ctk.CTkButton(app.pagination_frame, text="Suivant >", width=120, command=app._next_page, state="disabled")
+    app.btn_next_page.grid(row=0, column=2, sticky="e")

@@ -4,6 +4,7 @@ from datetime import datetime
 import time
 import shutil
 import math
+from concurrent.futures import ThreadPoolExecutor
 from . import config
 
 # Noms des mois pour les onglets Excel
@@ -135,18 +136,26 @@ def load_all_data():
     except FileNotFoundError:
         return pd.DataFrame()
 
-    for year in sorted(year_dirs, reverse=True): # Traite les années récentes en premier
+    year_dirs = sorted(year_dirs, reverse=True)
+    all_dfs = []
+
+    def load_year_file(year):
         excel_path = _get_excel_path(year)
         if not os.path.exists(excel_path):
-            continue
+            return []
         try:
             yearly_sheets = pd.read_excel(excel_path, sheet_name=None)
-            for month_df in yearly_sheets.values():
-                if not month_df.empty:
-                    all_dfs.append(month_df)
+            return [df for df in yearly_sheets.values() if not df.empty]
         except Exception as e:
             print(f"Impossible de lire le fichier pour l'année {year}: {e}")
-    
+            return []
+
+    with ThreadPoolExecutor() as executor:
+        # map préserve l'ordre de year_dirs (années récentes en premier)
+        results = executor.map(load_year_file, year_dirs)
+        for dfs in results:
+            all_dfs.extend(dfs)
+
     if not all_dfs:
         return pd.DataFrame()
         

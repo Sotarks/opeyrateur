@@ -39,7 +39,7 @@ def create_new_invoice_tab(app):
     app.family_members_container = ctk.CTkFrame(app.family_frame, fg_color="transparent")
     app.family_members_container.pack(fill="x", expand=True, padx=10, pady=5)
 
-    app.add_member_button = ctk.CTkButton(app.family_frame, text="Ajouter un membre", command=app._add_family_member)
+    app.add_member_button = ctk.CTkButton(app.family_frame, text="Ajouter un membre", command=app.invoice_manager.add_family_member)
     app.add_member_button.pack(pady=(5, 10), padx=10, fill="x")
 
     # --- Cadre Consultation de couple ---
@@ -106,7 +106,7 @@ def create_new_invoice_tab(app):
     app.seance_date.bind("<1>", lambda event: app._open_calendar(app.seance_date))
 
     app.seance_non_lieu_var = ctk.BooleanVar()
-    app.seance_non_lieu_check = ctk.CTkCheckBox(seance_date_frame, text="Non-lieu", variable=app.seance_non_lieu_var, command=app._toggle_seance_date)
+    app.seance_non_lieu_check = ctk.CTkCheckBox(seance_date_frame, text="Non-lieu", variable=app.seance_non_lieu_var, command=app.invoice_manager.toggle_seance_date)
     app.seance_non_lieu_check.grid(row=1, column=1, padx=(10, 0), pady=(0, 10))
 
     prestation_montant_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
@@ -115,7 +115,7 @@ def create_new_invoice_tab(app):
     prestation_montant_frame.grid_columnconfigure(1, weight=1)
 
     ctk.CTkLabel(prestation_montant_frame, text="Type de séance").grid(row=0, column=0, sticky="w")
-    app.prestation = ctk.CTkOptionMenu(prestation_montant_frame, values=list(app.prestations_prix.keys()), command=app._update_form)
+    app.prestation = ctk.CTkOptionMenu(prestation_montant_frame, values=list(app.prestations_prix.keys()), command=app.invoice_manager.update_form)
     app.prestation.grid(row=1, column=0, pady=5, sticky="ew", padx=(0, 5))
 
     ctk.CTkLabel(prestation_montant_frame, text="Prix").grid(row=0, column=1, sticky="w")
@@ -127,7 +127,7 @@ def create_new_invoice_tab(app):
     payment_frame.grid_columnconfigure((0, 1), weight=1)
 
     ctk.CTkLabel(payment_frame, text="Mode de paiement").grid(row=0, column=0, sticky="w")
-    app.payment_method = ctk.CTkOptionMenu(payment_frame, values=["Virement", "Espèce", "Chèque", "Impayé"], command=app._toggle_payment_date_field)
+    app.payment_method = ctk.CTkOptionMenu(payment_frame, values=["Virement", "Espèce", "Chèque", "Impayé"], command=app.invoice_manager.toggle_payment_date_field)
     app.payment_method.grid(row=1, column=0, pady=5, sticky="ew", padx=(0, 5))
     app.payment_method.set("Virement")
 
@@ -142,6 +142,6 @@ def create_new_invoice_tab(app):
     app.personal_note = ctk.CTkEntry(details_frame, placeholder_text="Ne sera pas affiché sur le PDF")
     app.personal_note.grid(row=5, column=0, sticky="ew", padx=10, pady=(0, 10))
 
-    app.btn = ctk.CTkButton(app.new_invoice_tab, text="Enregistrer & Générer PDF", command=app.valider, height=45, font=app.font_button)
+    app.btn = ctk.CTkButton(app.new_invoice_tab, text="Enregistrer & Générer PDF", command=app.invoice_manager.valider, height=45, font=app.font_button)
     app.btn.grid(row=3, column=0, padx=10, pady=20, sticky="sew")
     app.new_invoice_tab.grid_rowconfigure(3, weight=1)
