@@ -545,6 +545,55 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Erreur de génération", f"Une erreur est survenue lors de la création du PDF :\n{e}")
 
+    def check_automatic_expenses(self):
+        """Vérifie si les frais récurrents doivent être générés (1er du mois)."""
+        from datetime import datetime
+        from . import settings_manager
+        from .data_manager import save_expense
+        
+        now = datetime.now()
+        
+        # On vérifie si on est le 1er du mois
+        if now.day != 1:
+            return
+
+        current_month_key = now.strftime("%Y-%m")
+        last_run = settings_manager.get_last_recurring_run()
+
+        # Si déjà exécuté pour ce mois, on ne fait rien
+        if last_run == current_month_key:
+            return
+
+        # On demande confirmation pour ne pas surprendre l'utilisateur
+        if messagebox.askyesno("Frais Récurrents", "📅 Nous sommes le 1er du mois.\n\nVoulez-vous générer automatiquement vos frais récurrents ?"):
+            recurring_data = settings_manager.get_recurring_expenses()
+            
+            if not recurring_data:
+                messagebox.showinfo("Info", "Aucun frais récurrent configuré.")
+                settings_manager.set_last_recurring_run(current_month_key)
+                return
+
+            count = 0
+            today_str = now.strftime("%d/%m/%Y")
+            
+            for item in recurring_data:
+                data = item.copy()
+                data['Date'] = today_str
+                if save_expense(data):
+                    count += 1
+            
+            # Enregistre que c'est fait pour ce mois
+            settings_manager.set_last_recurring_run(current_month_key)
+            
+            self._show_status_message(f"{count} frais récurrents générés.")
+            
+            # Mise à jour de l'interface si nécessaire
+            if self.is_expenses_tab_initialized:
+                from .expenses_tab import refresh_expenses_list
+                refresh_expenses_list(self)
+            
+            self._update_dashboard_kpis()
+
 if __name__ == "__main__":
     app = App()
     app.mainloop()

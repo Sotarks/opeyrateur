@@ -31,6 +31,18 @@ DEFAULT_SETTINGS = {
             "Consultation familiale": 75.0,
             "Consultation de couple": 75.0
         }, indent=4)
+    },
+    'Expenses': {
+        'recurring': json.dumps([
+            {"Categorie": "Loyer", "Description": "Loyer / Cabinet", "Montant": 560.0, "ProofPath": ""},
+            {"Categorie": "Cotisations", "Description": "Doctolib", "Montant": 149.0, "ProofPath": ""},
+            {"Categorie": "Cotisations", "Description": "Responsabilité civile pro", "Montant": 12.5, "ProofPath": ""},
+            {"Categorie": "Cotisations", "Description": "Assurance cabinet", "Montant": 11.4, "ProofPath": ""},
+            {"Categorie": "Autre", "Description": "Téléphone", "Montant": 1.99, "ProofPath": ""},
+            {"Categorie": "Déplacement", "Description": "Essence", "Montant": 120.0, "ProofPath": ""},
+            {"Categorie": "Cotisations", "Description": "Mutuelle", "Montant": 5.0, "ProofPath": ""},
+            {"Categorie": "Repas", "Description": "Nourriture", "Montant": 80.0, "ProofPath": ""}
+        ])
     }
 }
 
@@ -103,3 +115,39 @@ def get_prestations():
     except (json.JSONDecodeError, configparser.Error):
         # En cas d'erreur, retourne le dictionnaire par défaut
         return json.loads(DEFAULT_SETTINGS['PDFInfo']['prestations'])
+
+def get_recurring_expenses():
+    """Récupère la liste des frais récurrents."""
+    setup_default_settings()
+    parser = _get_parser()
+    try:
+        data_str = parser.get('Expenses', 'recurring', fallback='[]')
+        return json.loads(data_str)
+    except (json.JSONDecodeError, configparser.Error):
+        return json.loads(DEFAULT_SETTINGS['Expenses']['recurring'])
+
+def save_recurring_expenses(data):
+    """Sauvegarde la liste des frais récurrents."""
+    parser = _get_parser()
+    if not parser.has_section('Expenses'):
+        parser.add_section('Expenses')
+    parser.set('Expenses', 'recurring', json.dumps(data))
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+        parser.write(configfile)
+    _invalidate_caches()
+
+def get_last_recurring_run():
+    """Récupère le mois de la dernière génération automatique (format YYYY-MM)."""
+    setup_default_settings()
+    parser = _get_parser()
+    return parser.get('Expenses', 'last_run', fallback='')
+
+def set_last_recurring_run(date_str):
+    """Sauvegarde le mois de la dernière génération automatique."""
+    parser = _get_parser()
+    if not parser.has_section('Expenses'):
+        parser.add_section('Expenses')
+    parser.set('Expenses', 'last_run', date_str)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+        parser.write(configfile)
+    _invalidate_caches()

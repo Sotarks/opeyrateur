@@ -234,7 +234,7 @@ def generate_attestation_pdf(data):
     pdf.output(full_path)
     return full_path
 
-def generate_expenses_report(year, df_expenses):
+def generate_expenses_report(title, df_expenses, year_for_filename):
     """Génère un PDF récapitulatif des frais pour l'année."""
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=25)
@@ -242,7 +242,7 @@ def generate_expenses_report(year, df_expenses):
 
     # Titre
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, f"Registre des Dépenses - Année {year}", ln=True, align='C')
+    pdf.cell(0, 10, title, ln=True, align='C')
     pdf.ln(10)
 
     def draw_header(pdf_instance):
@@ -360,10 +360,10 @@ def generate_expenses_report(year, df_expenses):
                  pdf.cell(0, 10, f"Nom du fichier : {os.path.basename(proof_path)}", ln=True)
 
     # Sauvegarde
-    output_dir = os.path.join(config.FRAIS_DIR, str(year))
+    output_dir = os.path.join(config.FRAIS_DIR, str(year_for_filename))
     os.makedirs(output_dir, exist_ok=True)
     
-    filename = f"Rapport_Frais_{year}.pdf"
+    filename = f"Rapport_Frais_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     full_path = os.path.join(output_dir, filename)
     pdf.output(full_path)
     return full_path

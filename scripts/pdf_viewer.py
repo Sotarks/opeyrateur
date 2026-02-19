@@ -53,6 +53,9 @@ class PDFViewer(ctk.CTkToplevel):
             self.download_button = ctk.CTkButton(controls_frame, text="Télécharger", command=self._download_pdf)
             self.download_button.pack(side="right", padx=(5, 5))
 
+        self.open_system_button = ctk.CTkButton(controls_frame, text="Ouvrir (Système)", command=self._open_in_system_viewer)
+        self.open_system_button.pack(side="right", padx=(5, 5))
+
         ctk.CTkButton(controls_frame, text="+", width=30, command=self.zoom_in).pack(side="right", padx=5)
         self.zoom_label = ctk.CTkLabel(controls_frame, text="100%")
         self.zoom_label.pack(side="right")
@@ -145,3 +148,10 @@ class PDFViewer(ctk.CTkToplevel):
             os.startfile(folder_path)
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'ouvrir le dossier:\n{e}", parent=self)
+
+    def _open_in_system_viewer(self):
+        """Ouvre le PDF avec le lecteur par défaut du système."""
+        try:
+            os.startfile(self.pdf_path)
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible d'ouvrir le fichier :\n{e}", parent=self)

@@ -3,6 +3,7 @@ from datetime import datetime
 from tkinter import filedialog, messagebox
 import os
 from . import config
+from . import settings_manager
 
 def create_budget_tab(app):
     """Crée les widgets pour l'onglet 'Budget'."""
@@ -65,6 +66,7 @@ def create_budget_tab(app):
     ctk.CTkButton(actions_frame, text="Calculer", command=lambda: calculate_budget(app), font=app.font_button, height=40).pack(fill="x", pady=5)
     ctk.CTkButton(actions_frame, text="Visualiser PDF (Vue actuelle)", command=lambda: _view_budget_pdf(app), font=app.font_button, height=40).pack(fill="x", pady=5)
     ctk.CTkButton(actions_frame, text="Générer Excel", command=lambda: _export_budget(app), fg_color="#34D399", hover_color="#10B981", font=app.font_button, height=40).pack(fill="x", pady=5)
+    ctk.CTkButton(actions_frame, text="Export Légal (.fec)", command=lambda: _export_fec(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button, height=40).pack(fill="x", pady=5)
 
     # --- Frame Résultats ---
     results_frame = ctk.CTkFrame(app.budget_tab, corner_radius=10)
@@ -299,3 +301,83 @@ def _view_budget_pdf(app):
         PDFViewer(app, path, download_filename=download_filename)
     except Exception as e:
         messagebox.showerror("Erreur", f"Impossible de visualiser le PDF : {e}")
+
+def _export_fec(app):
+    """Génère un fichier FEC (Fichier des Écritures Comptables) pour l'année sélectionnée."""
+    import pandas as pd
+    from .data_manager import load_year_data
+    
+    year = app.budget_year_var.get()
+    df = load_year_data(year)
+    
+    if df.empty:
+        messagebox.showwarning("Export FEC", f"Aucune donnée trouvée pour l'année {year}.")
+        return
+
+    # Récupération du SIREN pour le nommage du fichier
+    pdf_info = settings_manager.get_pdf_info()
+    siret = pdf_info.get('siret', '').replace(' ', '')
+    siren = siret[:9] if len(siret) >= 9 else "000000000"
+    
+    # Nom du fichier selon norme : SirenFECYYYYMMDD.txt
+    filename = f"{siren}FEC{datetime.now().strftime('%Y%m%d')}.txt"
+    
+    filepath = filedialog.asksaveasfilename(
+        defaultextension=".txt",
+        initialfile=filename,
+        title="Enregistrer le fichier FEC (Format Légal)",
+        filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
+    )
+    
+    if not filepath:
+        return
+
+    try:
+        lines = []
+        # En-tête officiel FEC (18 champs)
+        header = [
+            "JournalCode", "JournalLib", "EcritureNum", "EcritureDate", 
+            "CompteNum", "CompteLib", "CompteAuxNum", "CompteAuxLib", 
+            "PieceRef", "PieceDate", "EcritureLib", "Debit", "Credit", 
+            "EcritureLet", "DateLet", "ValidDate", "Montantdevise", "Idevise"
+        ]
+        lines.append("\t".join(header))
+        
+        # Tri par date puis par ID pour la chronologie
+        if 'Date' in df.columns:
+            df['DateObj'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
+            df = df.sort_values(by=['DateObj', 'ID'])
+        
+        for _, row in df.iterrows():
+            try:
+                date_str = row['Date']
+                date_obj = datetime.strptime(date_str, '%d/%m/%Y')
+                fec_date = date_obj.strftime("%Y%m%d")
+                ref_piece = str(row['ID'])
+                
+                # Formatage montant (virgule comme séparateur décimal)
+                montant_float = float(row['Montant']) if pd.notnull(row['Montant']) else 0.0
+                montant_str = f"{montant_float:.2f}".replace('.', ',')
+                zero_str = "0,00"
+                
+                nom_patient = f"{row.get('Prenom', '')} {row.get('Nom', '')}".strip()
+                libelle = f"Facture {ref_piece} - {nom_patient}"
+                
+                # Écriture 1 : Client (Debit 411)
+                line_client = ["VT", "Ventes", ref_piece, fec_date, "411000", "Clients", "", "", ref_piece, fec_date, libelle, montant_str, zero_str, "", "", fec_date, "", ""]
+                lines.append("\t".join(line_client))
+                
+                # Écriture 2 : Produit (Credit 706)
+                line_prod = ["VT", "Ventes", ref_piece, fec_date, "706000", "Prestations de services", "", "", ref_piece, fec_date, libelle, zero_str, montant_str, "", "", fec_date, "", ""]
+                lines.append("\t".join(line_prod))
+                
+            except Exception:
+                continue
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write("\n".join(lines))
+            
+        messagebox.showinfo("Succès", f"Fichier FEC généré avec succès :\n{filepath}")
+        
+    except Exception as e:
+        messagebox.showerror("Erreur", f"Impossible de générer le fichier FEC :\n{e}")

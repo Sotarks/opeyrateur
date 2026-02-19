@@ -54,6 +54,9 @@ class LoginUI:
             # Import différé pour éviter les cycles si dashboard a besoin de app
             from .dashboard import update_dashboard_kpis
             update_dashboard_kpis(self.app)
+            
+            # Vérification des frais automatiques (1er du mois)
+            self.app.check_automatic_expenses()
         else:
             self.app.pin_entry.delete(0, 'end')
             messagebox.showerror("Erreur", "Code PIN incorrect.")
