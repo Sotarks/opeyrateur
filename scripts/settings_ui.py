@@ -370,6 +370,7 @@ class SettingsUI:
             self.regeneration_queue.put(('error', str(e)))
 
     def _update_regeneration_progress(self, window, bar, p_label, t_label, total, start_time):
+        if not window.winfo_exists(): return
         try:
             message_type, data = self.regeneration_queue.get_nowait()
             if message_type == 'progress':
@@ -391,4 +392,5 @@ class SettingsUI:
                 window.destroy()
                 messagebox.showerror("Erreur", f"Erreur : {data}")
         except queue.Empty:
-            self.app.after(100, self._update_regeneration_progress, window, bar, p_label, t_label, total, start_time)
+            if window.winfo_exists():
+                self.app.after(100, self._update_regeneration_progress, window, bar, p_label, t_label, total, start_time)

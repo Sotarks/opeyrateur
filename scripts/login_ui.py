@@ -91,10 +91,12 @@ class LoginUI:
         try:
             from .dashboard import load_dashboard_data
             data = load_dashboard_data(self.app)
-            self.app.after(0, lambda: self._finish_loading(data))
+            if self.app.winfo_exists():
+                self.app.after(0, lambda: self._finish_loading(data))
         except Exception as e:
-            self.app.after(0, lambda: messagebox.showerror("Erreur", f"Erreur chargement: {e}"))
-            if hasattr(self, 'loading_window'): self.app.after(0, self.loading_window.destroy)
+            if self.app.winfo_exists():
+                self.app.after(0, lambda: messagebox.showerror("Erreur", f"Erreur chargement: {e}"))
+                if hasattr(self, 'loading_window') and self.loading_window.winfo_exists(): self.app.after(0, self.loading_window.destroy)
 
     def _finish_loading(self, data):
         from .dashboard import update_dashboard_views

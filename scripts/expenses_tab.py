@@ -42,7 +42,7 @@ def create_expenses_tab(app):
     ctk.CTkLabel(sidebar, text="Catégorie", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
     categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
                   "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
-                  "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
+                  "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Prélèvement Personnel", "Autre"]
     app.expense_cat = ctk.CTkComboBox(sidebar, values=categories, height=35)
     app.expense_cat.pack(pady=(0, 10), padx=20, fill="x")
 
@@ -244,7 +244,7 @@ def _add_expense(app):
         category = app.expense_cat.get().strip()
         valid_categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
                       "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
-                      "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
+                      "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Prélèvement Personnel", "Autre"]
 
         if not category or category not in valid_categories:
             messagebox.showwarning("Catégorie invalide", "Veuillez sélectionner une catégorie valide dans la liste.")
@@ -664,7 +664,7 @@ def _open_recurring_expenses_window(app):
 
     categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
                   "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
-                  "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
+                  "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Prélèvement Personnel", "Autre"]
     cat_var = ctk.CTkComboBox(add_frame, values=categories)
     cat_var.grid(row=1, column=0, padx=5, pady=5)
 

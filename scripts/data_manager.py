@@ -30,6 +30,7 @@ ACCOUNT_MAP = {
     "Déplacement": "625100",
     "Cotisations": "646000",
     "Tenue Pro": "606300",
+    "Prélèvement Personnel": "108000",
     "Autre": "628000",
     "Matériel": "606300", "Fournitures": "606400"
 }
@@ -461,6 +462,7 @@ def _guess_category(description):
         "Banque": ["BANQUE", "FRAIS", "COMMISSION", "AGIOS", "CB"],
         "Assurance RCP": ["MAAF", "AXA", "ALLIANZ", "MACIF", "MATMUT", "RCP", "ASSURANCE"],
         "Tenue Pro": ["BLOUSE", "VETEMENT", "CHAUSSURE", "TENUE", "UNIFORME", "TEXTILE"],
+        "Prélèvement Personnel": ["SALAIRE", "PERSO", "PRELEVEMENT", "VIREMENT COMPTE", "REMUNERATION"],
         "Déplacement": ["SNCF", "UBER", "TAXI", "TOTAL", "ESSO", "BP", "SHELL", "PEAGE", "PARKING", "STATION", "AIR FRANCE", "EASYJET"],
         "Cotisations": ["URSSAF", "CIPAV", "RETRAITE", "RAM", "CPAM", "IMPOTS", "SIE", "CFE"],
         "Autre": []

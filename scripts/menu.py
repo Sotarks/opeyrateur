@@ -128,12 +128,12 @@ def create_menu(app):
     btn_width = 300
     btn_height = 50
 
-    ctk.CTkButton(buttons_frame, text="Nouvelle Facture", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.new_invoice_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="Rechercher", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.search_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="Budget", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.budget_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="Frais", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.expenses_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="Attestation", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.attestation_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="Quitter", font=app.font_button, width=btn_width, height=btn_height, fg_color="#D32F2F", hover_color="#B71C1C", command=app.destroy).pack(pady=(20, 0), fill="x")
+    ctk.CTkButton(buttons_frame, text="📝 Nouvelle Facture", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.new_invoice_wrapper)).pack(pady=5, fill="x")
+    ctk.CTkButton(buttons_frame, text="🔍 Rechercher", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.search_wrapper)).pack(pady=5, fill="x")
+    ctk.CTkButton(buttons_frame, text="💰 Budget", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.budget_wrapper)).pack(pady=5, fill="x")
+    ctk.CTkButton(buttons_frame, text="💸 Frais", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.expenses_wrapper)).pack(pady=5, fill="x")
+    ctk.CTkButton(buttons_frame, text="📄 Attestation", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.attestation_wrapper)).pack(pady=5, fill="x")
+    ctk.CTkButton(buttons_frame, text="🚪 Quitter", font=app.font_button, width=btn_width, height=btn_height, fg_color="#D32F2F", hover_color="#B71C1C", command=app.destroy).pack(pady=(20, 0), fill="x")
 
     # Bouton des paramètres en bas à droite de la fenêtre
     ctk.CTkButton(center_frame, text="⚙️", font=ctk.CTkFont(family="Montserrat", size=24), width=50, height=50, command=app._open_settings_window, fg_color="transparent", text_color=("#1E1E1E", "#E0E0E0")).grid(row=1, column=1, sticky="se", padx=20, pady=20)

@@ -8,6 +8,11 @@ import tkinter as tk
 from tkinter import filedialog
 import random
 from PIL import Image
+import threading
+import warnings
+
+# Ignorer l'avertissement de conflit entre PyFPDF et fpdf2
+warnings.filterwarnings("ignore", category=UserWarning, module="fpdf")
 
 # --- Imports des modules séparés ---
 from . import config 
@@ -402,7 +407,21 @@ class App(ctk.CTk):
         self.expenses_wrapper.grid_forget()
         self.attestation_wrapper.grid_forget()
         self.menu_frame.grid(row=0, column=0, sticky="nsew")
-        update_dashboard_kpis(self)
+        
+        # Force l'affichage immédiat du menu
+        self.update_idletasks()
+        
+        # Chargement des données en arrière-plan pour éviter le gel de l'interface
+        def _refresh_bg():
+            from .dashboard import load_dashboard_data, update_dashboard_views
+            if not self.winfo_exists(): return
+            try:
+                data = load_dashboard_data(self)
+                if self.winfo_exists():
+                    self.after(0, lambda: update_dashboard_views(self, data))
+            except Exception: pass
+            
+        threading.Thread(target=_refresh_bg, daemon=True).start()
 
     def _update_dashboard_kpis(self):
         update_dashboard_kpis(self)
@@ -529,19 +548,46 @@ class App(ctk.CTk):
             entry_widget.insert(0, cal.get_date())
             if make_readonly:
                 entry_widget.configure(state="readonly")
-            self._calendar_toplevel.destroy()
-            self._calendar_toplevel = None
+            if self._calendar_toplevel:
+                self._calendar_toplevel.destroy()
+                self._calendar_toplevel = None
             self.focus()
+            
+        def set_today():
+            cal.selection_set(datetime.now())
+            set_date_and_close()
 
         def on_close():
-            self._calendar_toplevel.destroy()
-            self._calendar_toplevel = None
+            if self._calendar_toplevel:
+                self._calendar_toplevel.destroy()
+                self._calendar_toplevel = None
+
+        # Fermeture au clic en dehors (perte de focus)
+        def on_focus_out(event):
+            self.after(100, check_focus)
+            
+        def check_focus():
+            if not self._calendar_toplevel or not self._calendar_toplevel.winfo_exists(): return
+            focused = self.focus_get()
+            
+            # Si le focus est perdu (clic hors appli) ou sur une autre fenêtre
+            if focused is None:
+                 on_close()
+                 return
+            
+            # Vérifie si le widget focus est dans le calendrier
+            widget = focused
+            while widget:
+                if widget == self._calendar_toplevel: return
+                widget = widget.master
+            on_close()
 
         self._calendar_toplevel = ctk.CTkToplevel(self)
         self._calendar_toplevel.title("Choisir une date")
         self._calendar_toplevel.transient(self)
-        self._calendar_toplevel.grab_set()
+        # self._calendar_toplevel.grab_set() # Désactivé pour permettre le clic en dehors
         self._calendar_toplevel.protocol("WM_DELETE_WINDOW", on_close)
+        self._calendar_toplevel.bind("<FocusOut>", on_focus_out)
 
         try:
             current_date = datetime.strptime(entry_widget.get(), '%d/%m/%Y')
@@ -552,11 +598,15 @@ class App(ctk.CTk):
 
         cal.pack(pady=10, padx=10)
 
-        ok_button = ctk.CTkButton(self._calendar_toplevel, text="Valider", command=set_date_and_close)
-        ok_button.pack(pady=10)
+        btn_frame = ctk.CTkFrame(self._calendar_toplevel, fg_color="transparent")
+        btn_frame.pack(pady=10, padx=10, fill="x")
+
+        ctk.CTkButton(btn_frame, text="Aujourd'hui", command=set_today, fg_color="#3498db", width=100).pack(side="left", padx=5, expand=True)
+        ctk.CTkButton(btn_frame, text="Valider", command=set_date_and_close, width=100).pack(side="left", padx=5, expand=True)
 
         self._calendar_toplevel.after(50, lambda: self._calendar_toplevel.geometry(f"+{self.winfo_x() + (self.winfo_width() - self._calendar_toplevel.winfo_width()) // 2}"
                                                                                    f"+{self.winfo_y() + (self.winfo_height() - self._calendar_toplevel.winfo_height()) // 2}"))
+        self._calendar_toplevel.after(100, lambda: self._calendar_toplevel.focus_set())
 
     def _generate_attestation_pdf(self):
         """Récupère les données du formulaire d'attestation et génère le PDF."""
@@ -635,6 +685,7 @@ class App(ctk.CTk):
 
     def _animate_fade_in(self, alpha=0.0):
         """Gère l'animation de fondu à l'ouverture."""
+        if not self.winfo_exists(): return
         if alpha < 1.0:
             alpha += 0.05
             self.attributes("-alpha", alpha)

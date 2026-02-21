@@ -65,8 +65,8 @@ class InvoiceManager:
             self.app.payment_date_entry.grid_forget()
             self.app.payment_date_label.grid_forget()
         else:
-            self.app.payment_date_label.grid(row=0, column=1, sticky="w")
-            self.app.payment_date_entry.grid(row=1, column=1, pady=5, sticky="ew", padx=(5, 0))
+            self.app.payment_date_label.grid(row=0, column=1, sticky="e", padx=(0, 5))
+            self.app.payment_date_entry.grid(row=0, column=2, sticky="ew")
 
     def update_form(self, prestation_choisie):
         """Met à jour le montant et l'affichage du formulaire selon la prestation."""
@@ -86,22 +86,12 @@ class InvoiceManager:
         self.app.p1_civility_frame.grid_forget()
 
         if is_child_session:
-            self.app.child_info_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
+            self.app.child_info_frame.grid(row=2, column=0, padx=0, pady=10, sticky="ew")
             self.app.p1_civility_frame.grid(row=1, column=0, sticky='w', padx=(10, 5))
-            self.app.prenom.configure(placeholder_text="Prénom Parent 1")
-            self.app.nom.configure(placeholder_text="Nom Parent 1")
         elif is_family_session:
-            self.app.family_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
-            self.app.prenom.configure(placeholder_text="Prénom Membre 1")
-            self.app.nom.configure(placeholder_text="Nom Membre 1")
+            self.app.family_frame.grid(row=2, column=0, padx=0, pady=10, sticky="ew")
         elif is_couple_session:
-            self.app.couple_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
-            self.app.prenom.configure(placeholder_text="Prénom Partenaire 1")
-            self.app.nom.configure(placeholder_text="Nom Partenaire 1")
-        else:
-            # Cas par défaut
-            self.app.prenom.configure(placeholder_text="Prénom Patient")
-            self.app.nom.configure(placeholder_text="Nom Patient")
+            self.app.couple_frame.grid(row=2, column=0, padx=0, pady=10, sticky="ew")
 
     def valider(self):
         """Valide le formulaire, sauvegarde les données et génère le PDF."""
