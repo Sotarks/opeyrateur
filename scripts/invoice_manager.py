@@ -2,7 +2,6 @@ import customtkinter as ctk
 from tkinter import messagebox
 from datetime import datetime
 from .data_manager import get_yearly_invoice_count, save_to_excel
-from .pdf_generator import generate_pdf
 
 class InvoiceManager:
     def __init__(self, app):
@@ -176,6 +175,7 @@ class InvoiceManager:
 
             self.app._invalidate_data_cache()
             save_to_excel(data)
+            from .pdf_generator import generate_pdf
             pdf_file = generate_pdf(data)
             self.app.invoice_actions.show_success_dialog(pdf_file)
             

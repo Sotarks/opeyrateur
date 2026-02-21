@@ -1,12 +1,10 @@
 import customtkinter as ctk
 from datetime import datetime
 import os
-import ast
 import time
 from tkinter import messagebox, PhotoImage
 import tkinter as tk
 from tkinter import filedialog
-import random
 from PIL import Image
 import threading
 import warnings

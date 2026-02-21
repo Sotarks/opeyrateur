@@ -7,7 +7,6 @@ from datetime import datetime
 import webbrowser
 
 from . import config
-from .pdf_viewer import PDFViewer
 from .data_manager import get_invoice_path, delete_invoice, MONTHS_FR, backup_database
 
 class InvoiceActions:
@@ -147,6 +146,7 @@ class InvoiceActions:
 
         def open_pdf():
             dialog.destroy()
+            from .pdf_viewer import PDFViewer
             PDFViewer(self.app, pdf_path)
 
         ctk.CTkButton(btn_frame, text="📂  Ouvrir l'emplacement", command=lambda: os.startfile(os.path.dirname(pdf_path)), fg_color="#34D399", hover_color="#10B981", height=40, font=self.app.font_button).pack(pady=8, fill="x")
@@ -162,6 +162,7 @@ class InvoiceActions:
         if not os.path.exists(pdf_path):
             messagebox.showwarning("Fichier introuvable", f"Le fichier PDF n'a pas été trouvé:\n{pdf_path}")
             return
+        from .pdf_viewer import PDFViewer
         PDFViewer(self.app, pdf_path)
 
     def open_invoice_folder(self, invoice_data):
