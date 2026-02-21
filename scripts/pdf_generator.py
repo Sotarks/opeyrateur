@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from PIL import Image
 from .utils import resource_path
 from . import config
@@ -236,6 +235,7 @@ def generate_attestation_pdf(data):
 
 def generate_expenses_report(title, df_expenses, year_for_filename):
     """Génère un PDF récapitulatif des frais pour l'année."""
+    import pandas as pd
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
@@ -370,6 +370,7 @@ def generate_expenses_report(title, df_expenses, year_for_filename):
 
 def generate_budget_report(year, month, quarter, df_budget):
     """Génère un rapport PDF pour le budget (mensuel ou annuel)."""
+    import pandas as pd
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()

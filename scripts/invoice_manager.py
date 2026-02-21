@@ -212,3 +212,42 @@ class InvoiceManager:
             messagebox.showerror("Erreur de format", "Le montant doit être un nombre valide.")
         except Exception as e:
             messagebox.showerror("Erreur inattendue", f"Une erreur est survenue : {e}")
+
+    def reset_form(self):
+        """Vide tous les champs du formulaire."""
+        if messagebox.askyesno("Confirmation", "Voulez-vous vraiment vider tout le formulaire ?"):
+            self.app.nom.delete(0, 'end')
+            self.app.prenom.delete(0, 'end')
+            self.app.adresse.delete(0, 'end')
+            self.app.montant.delete(0, 'end')
+            self.app.personal_note.delete(0, 'end')
+            
+            # Reset champs spécifiques
+            self.app.enfant_nom.delete(0, 'end')
+            self.app.enfant_dob.configure(state="normal")
+            self.app.enfant_dob.delete(0, 'end')
+            self.app.enfant_dob.configure(state="readonly")
+            
+            self.app.prenom2.delete(0, 'end')
+            self.app.nom2.delete(0, 'end')
+            self.app.prenom2_couple.delete(0, 'end')
+            self.app.nom2_couple.delete(0, 'end')
+
+            # Vide les membres de la famille
+            for widget in self.app.family_members_container.winfo_children():
+                widget.destroy()
+            self.family_member_entries.clear()
+            self.app.add_member_button.configure(state="normal")
+            
+            # Reset dates
+            self.app.payment_date_entry.configure(state="normal")
+            self.app.payment_date_entry.delete(0, 'end')
+            self.app.payment_date_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
+            self.app.payment_date_entry.configure(state="readonly")
+
+            self.app.seance_date.configure(state="normal")
+            self.app.seance_date.delete(0, 'end')
+            self.app.seance_date.insert(0, datetime.now().strftime("%d/%m/%Y"))
+            self.app.seance_date.configure(state="readonly")
+            self.app.seance_non_lieu_var.set(False)
+            self.toggle_seance_date()

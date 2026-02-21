@@ -4,7 +4,6 @@ import tkinter as tk
 import os
 import ast
 from datetime import datetime
-import pandas as pd
 import webbrowser
 
 from . import config
@@ -96,6 +95,7 @@ class InvoiceActions:
 
     def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, new_child_dob, regen_pdf, window):
         try:
+            import pandas as pd
             invoice_date = datetime.strptime(invoice_data.get('Date'), '%d/%m/%Y')
             year = invoice_date.year
             month_name = MONTHS_FR[invoice_date.month - 1]

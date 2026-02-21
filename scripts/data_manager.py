@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from datetime import datetime
 import time
 import shutil
@@ -20,6 +19,7 @@ def _get_excel_path(year):
 
 def get_yearly_invoice_count(year):
     """Compte le nombre total de factures pour une année à partir de son fichier Excel."""
+    import pandas as pd
     excel_path = _get_excel_path(year)
     if not os.path.exists(excel_path):
         return 0
@@ -51,6 +51,7 @@ def backup_database(year):
 
 def save_to_excel(data):
     """Enregistre les données d'une facture dans le bon onglet du bon fichier Excel annuel."""
+    import pandas as pd
     invoice_date = datetime.strptime(data['Date'], '%d/%m/%Y')
     year = invoice_date.year
     month_name = MONTHS_FR[invoice_date.month - 1]
@@ -117,6 +118,7 @@ def get_invoice_path(data, get_folder=False):
     # Correction : On force le format 4 chiffres (ex: 1 devient "0001")
     raw_seq = data.get('SequenceID', 0)
     try:
+        import pandas as pd
         if pd.isna(raw_seq): raw_seq = 0
         sequence_str = f"{int(raw_seq):04d}"
     except (ValueError, TypeError):
@@ -127,6 +129,7 @@ def get_invoice_path(data, get_folder=False):
 
 def load_all_data():
     """Charge toutes les données de tous les fichiers 'factures_YYYY.xlsx' dans un seul DataFrame."""
+    import pandas as pd
     all_dfs = []
     if not os.path.exists(config.FACTURES_DIR):
         return pd.DataFrame()
@@ -173,6 +176,7 @@ def get_available_years():
 
 def load_year_data(year):
     """Charge les données pour une année spécifique."""
+    import pandas as pd
     excel_path = _get_excel_path(year)
     if not os.path.exists(excel_path):
         return pd.DataFrame()
@@ -189,6 +193,7 @@ def load_year_data(year):
 
 def delete_invoice(data):
     """Supprime une facture du fichier Excel."""
+    import pandas as pd
     try:
         invoice_date = datetime.strptime(data['Date'], '%d/%m/%Y')
         year = invoice_date.year
@@ -226,6 +231,7 @@ def _get_expenses_excel_path(year):
 
 def save_expense(data):
     """Enregistre une dépense dans le fichier Excel des frais."""
+    import pandas as pd
     try:
         if 'ExpenseID' not in data or not data['ExpenseID']:
             data['ExpenseID'] = f"EXP-{int(time.time() * 1000)}"
@@ -292,6 +298,7 @@ def save_expense(data):
 
 def load_expenses(year):
     """Charge les frais pour une année donnée."""
+    import pandas as pd
     excel_path = _get_expenses_excel_path(year)
     columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath"]
     if not os.path.exists(excel_path):
@@ -308,6 +315,7 @@ def load_expenses(year):
 
 def delete_expense(data):
     """Supprime une dépense du fichier Excel."""
+    import pandas as pd
     try:
         date_obj = datetime.strptime(data['Date'], '%d/%m/%Y')
         year = date_obj.year

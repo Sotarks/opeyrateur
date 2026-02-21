@@ -142,6 +142,15 @@ def create_new_invoice_tab(app):
     app.personal_note = ctk.CTkEntry(details_frame, placeholder_text="Ne sera pas affiché sur le PDF")
     app.personal_note.grid(row=5, column=0, sticky="ew", padx=10, pady=(0, 10))
 
-    app.btn = ctk.CTkButton(app.new_invoice_tab, text="Enregistrer & Générer PDF", command=app.invoice_manager.valider, height=45, font=app.font_button)
-    app.btn.grid(row=3, column=0, padx=10, pady=20, sticky="sew")
+    # Boutons d'action
+    action_frame = ctk.CTkFrame(app.new_invoice_tab, fg_color="transparent")
+    action_frame.grid(row=3, column=0, padx=10, pady=20, sticky="ew")
+    action_frame.grid_columnconfigure(0, weight=1)
+    action_frame.grid_columnconfigure(1, weight=1)
+
+    app.clear_btn = ctk.CTkButton(action_frame, text="Vider le formulaire", command=app.invoice_manager.reset_form, height=45, font=app.font_button, fg_color="gray50", hover_color="gray30")
+    app.clear_btn.grid(row=0, column=0, padx=(0, 5), sticky="ew")
+
+    app.btn = ctk.CTkButton(action_frame, text="Enregistrer & Générer PDF", command=app.invoice_manager.valider, height=45, font=app.font_button)
+    app.btn.grid(row=0, column=1, padx=(5, 0), sticky="ew")
     app.new_invoice_tab.grid_rowconfigure(3, weight=1)

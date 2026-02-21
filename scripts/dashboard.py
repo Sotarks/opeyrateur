@@ -1,13 +1,18 @@
 import customtkinter as ctk
 from datetime import datetime
-import pandas as pd
 from .data_manager import load_expenses, MONTHS_FR
 
 def update_dashboard_kpis(app):
     """Calcule et met à jour les indicateurs clés et le graphique du tableau de bord."""
+    data = load_dashboard_data(app)
+    update_dashboard_views(app, data)
+
+def load_dashboard_data(app):
+    """Charge les données nécessaires pour le tableau de bord (exécutable dans un thread)."""
+    import pandas as pd
     try:
         now = datetime.now()
-        app._invalidate_data_cache()
+        # Optimisation : On ne vide plus le cache ici systématiquement.
         invoices_df = app._load_data_with_cache()
         expenses_df = load_expenses(now.year)
 
@@ -47,14 +52,59 @@ def update_dashboard_kpis(app):
             monthly_expenses = expenses_df[(expenses_df['Date'].dt.year == now.year) & (expenses_df['Date'].dt.month == now.month)]
             expenses_month = monthly_expenses['Montant'].sum()
 
-        # Update KPI Labels
-        app.kpi_revenue_label.configure(text=f"{revenue_month:,.2f} €".replace(",", " "))
-        app.kpi_sessions_label.configure(text=f"{sessions_month}")
-        app.kpi_unpaid_label.configure(text=f"{unpaid_total:,.2f} €".replace(",", " "))
-        app.kpi_expenses_label.configure(text=f"{expenses_month:,.2f} €".replace(",", " "))
-        app.kpi_unpaid_label.configure(text_color="#e74c3c" if unpaid_total > 0 else ("#1E1E1E", "#E0E0E0"))
+        # --- Calcul Salaire "Vrai" (Mensuel) ---
+        # Règle : 1/3 Charges, 1/3 Frais, 1/3 Salaire sur le mois en cours
+        taxes_paid_month = 0.0
+        if not expenses_df.empty:
+             taxes_paid_month = monthly_expenses[monthly_expenses['Categorie'] == 'Cotisations']['Montant'].sum()
+        
+        ops_paid_month = expenses_month - taxes_paid_month
+
+        one_third = revenue_month / 3.0
+        prov_taxes = max(0.0, one_third - taxes_paid_month)
+        prov_ops = max(0.0, one_third - ops_paid_month)
+        cash_flow = revenue_month - expenses_month
+        safe_salary = cash_flow - prov_taxes - prov_ops
+
+        return {
+            "revenue_month": revenue_month,
+            "sessions_month": sessions_month,
+            "unpaid_total": unpaid_total,
+            "expenses_month": expenses_month,
+            "salary_metrics": {
+                "safe_salary": safe_salary,
+                "prov_taxes": prov_taxes,
+                "prov_ops": prov_ops
+            },
+            "success": True
+        }
     except Exception as e:
-        print(f"Erreur lors de la mise à jour du tableau de bord : {e}")
+        return {"success": False, "error": str(e)}
+
+def update_dashboard_views(app, data):
+    """Met à jour les widgets du tableau de bord avec les données calculées."""
+    if not data.get("success", False):
+        print(f"Erreur dashboard: {data.get('error')}")
+        return
+
+    app.kpi_revenue_label.configure(text=f"{data['revenue_month']:,.2f} €".replace(",", " "))
+    app.kpi_sessions_label.configure(text=f"{data['sessions_month']}")
+    app.kpi_unpaid_label.configure(text=f"{data['unpaid_total']:,.2f} €".replace(",", " "))
+    app.kpi_expenses_label.configure(text=f"{data['expenses_month']:,.2f} €".replace(",", " "))
+    
+    # Gestion de la couleur pour les impayés
+    unpaid_val = data['unpaid_total']
+    app.kpi_unpaid_label.configure(text_color="#e74c3c" if unpaid_val > 0 else ("#1E1E1E", "#E0E0E0"))
+
+    # Mise à jour du Salaire Estimé
+    if hasattr(app, 'kpi_salary_label'):
+        salary_data = data.get("salary_metrics", {})
+        safe_salary = salary_data.get("safe_salary", 0.0)
+        prov_taxes = salary_data.get("prov_taxes", 0.0)
+        prov_ops = salary_data.get("prov_ops", 0.0)
+        
+        app.kpi_salary_label.configure(text=f"{safe_salary:,.2f} €".replace(",", " "), text_color="#2ecc71" if safe_salary >= 0 else "#e74c3c")
+        app.kpi_salary_details.configure(text=f"À provisionner : Charges {prov_taxes:,.0f}€ | Frais {prov_ops:,.0f}€")
 
 def on_kpi_click(app, kpi_name):
     """Gère le clic sur un indicateur du tableau de bord."""

@@ -2,6 +2,7 @@ import customtkinter as ctk
 import os
 from PIL import Image
 from .utils import resource_path
+from .utils import ToolTip
 
 def create_menu(app):
     """Construit l'interface du menu principal."""
@@ -102,6 +103,19 @@ def create_menu(app):
         widget.bind("<Enter>", lambda e, f=kpi4_frame: on_kpi_enter(e, f))
         widget.bind("<Leave>", lambda e, f=kpi4_frame: on_kpi_leave(e, f))
         widget.bind("<Button-1>", lambda e: app._on_kpi_click("expenses_month"))
+
+    # --- Section Salaire / Répartition (Nouveau) ---
+    salary_frame = ctk.CTkFrame(dashboard_frame, corner_radius=10)
+    salary_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+    
+    ctk.CTkLabel(salary_frame, text="Salaire Net Disponible (Mensuel)", font=app.font_bold, text_color="gray").pack(pady=(10, 0))
+    app.kpi_salary_label = ctk.CTkLabel(salary_frame, text="...", font=ctk.CTkFont(size=24, weight="bold"), text_color="#3498db")
+    app.kpi_salary_label.pack(pady=(0, 5))
+    
+    app.kpi_salary_details = ctk.CTkLabel(salary_frame, text="...", font=ctk.CTkFont(size=11), text_color="gray")
+    app.kpi_salary_details.pack(pady=(0, 10))
+    
+    ToolTip(salary_frame, "Calcul basé sur la règle des 3 tiers pour le mois en cours :\n1/3 Charges, 1/3 Frais, 1/3 Salaire.\nLe montant affiché est ce qu'il reste après déduction\ndes frais réels du mois et des provisions nécessaires.")
 
     # Boutons
     btn_width = 300

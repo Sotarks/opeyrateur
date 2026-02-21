@@ -7,6 +7,7 @@ from tkinter import messagebox, PhotoImage
 import tkinter as tk
 from tkinter import filedialog
 import random
+from PIL import Image
 
 # --- Imports des modules séparés ---
 from . import config 
@@ -24,33 +25,45 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # --- Fenêtre de chargement ---
-        self.title("Opeyrateur - Chargement en cours...")
-        # Centrer la fenêtre de chargement
-        start_width = 400
-        start_height = 200
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        x = (screen_width / 2) - (start_width / 2)
-        y = (screen_height / 2) - (start_height / 2)
-        self.geometry(f'{start_width}x{start_height}+{int(x)}+{int(y)}')
+        # --- Fenêtre de chargement (Splash Screen) ---
+        self.overrideredirect(True) # Masque la barre de titre
+        self.attributes('-topmost', True) # Au premier plan
+        
+        # Dimensions et centrage
+        splash_w, splash_h = 600, 400
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        x = (screen_w - splash_w) // 2
+        y = (screen_h - splash_h) // 2
+        self.geometry(f'{splash_w}x{splash_h}+{x}+{y}')
 
-        loading_frame = ctk.CTkFrame(self)
-        ctk.CTkLabel(loading_frame, text="Chargement de l'application...", font=("Montserrat", 16)).pack(pady=(40, 10))
-        progress_bar = ctk.CTkProgressBar(loading_frame, width=300)
-        progress_bar.pack(pady=10, padx=20)
-        progress_bar.start()
-
-        # --- Configuration de la grille principale ---
-        self.grid_rowconfigure(0, weight=1) # Ligne pour le contenu principal
-        self.grid_rowconfigure(1, weight=0) # Ligne pour la barre de statut
+        # Design du Splash Screen
+        self.splash_frame = ctk.CTkFrame(self, corner_radius=20, border_width=2, border_color="#2A2A2A", fg_color=["#F0F0F0", "#1a1a1a"])
+        self.splash_frame.grid(row=0, column=0, sticky="nsew")
+        self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
-        loading_frame.grid(row=0, column=0, rowspan=2, sticky="nsew")
+        
+        # Logo
+        try:
+            logo_path = resource_path(os.path.join("src", "logo.png"))
+            if os.path.exists(logo_path):
+                pil_img = Image.open(logo_path)
+                logo_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(120, 120))
+                ctk.CTkLabel(self.splash_frame, image=logo_img, text="").pack(pady=(50, 20))
+        except Exception:
+            pass
 
-        self.update_idletasks() # Forcer l'affichage de la fenêtre de chargement
+        # Titre et Sous-titre
+        ctk.CTkLabel(self.splash_frame, text="L'Opeyrateur", font=("Montserrat", 36, "bold")).pack(pady=(0, 5))
+        ctk.CTkLabel(self.splash_frame, text="Gestion de cabinet simplifiée", font=("Montserrat", 14), text_color="gray").pack(pady=(0, 40))
+
+        # Barre de progression
+        self.splash_progress = ctk.CTkProgressBar(self.splash_frame, width=400, height=10, corner_radius=5)
+        self.splash_progress.pack(pady=(0, 10))
+        self.splash_progress.start()
+
+        self.update() # Force l'affichage immédiat
         start_time = time.time()
-
-        self.title("Opeyrateur - A. Peyrat")
 
         # --- Définir l'icône de la fenêtre ---
         try:
@@ -96,19 +109,19 @@ class App(ctk.CTk):
         self.menu_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         
         # --- Création des Wrappers pour les outils ---
-        self.new_invoice_wrapper = self._create_tool_wrapper("Nouvelle Facture")
+        self.new_invoice_wrapper = self._create_tool_wrapper("Nouvelle Facture", scrollable=True)
         self.new_invoice_tab = self.new_invoice_wrapper.content_frame 
 
-        self.search_wrapper = self._create_tool_wrapper("Rechercher")
+        self.search_wrapper = self._create_tool_wrapper("Rechercher", scrollable=False)
         self.search_tab = self.search_wrapper.content_frame
 
-        self.budget_wrapper = self._create_tool_wrapper("Budget")
+        self.budget_wrapper = self._create_tool_wrapper("Budget", scrollable=True)
         self.budget_tab = self.budget_wrapper.content_frame
 
-        self.expenses_wrapper = self._create_tool_wrapper("Frais")
+        self.expenses_wrapper = self._create_tool_wrapper("Frais", scrollable=False)
         self.expenses_tab = self.expenses_wrapper.content_frame
 
-        self.attestation_wrapper = self._create_tool_wrapper("Attestation")
+        self.attestation_wrapper = self._create_tool_wrapper("Attestation", scrollable=True)
         self.attestation_tab = self.attestation_wrapper.content_frame
 
         # --- Construction du Menu (via script externe) ---
@@ -125,6 +138,7 @@ class App(ctk.CTk):
         self.bind("<Control-f>", self._focus_search)
         # Le bind sur le wrapper assure que le raccourci n'est actif que sur cet écran
         self.new_invoice_wrapper.bind("<Control-Return>", lambda event: self.invoice_manager.valider())
+        self.new_invoice_wrapper.bind("<Return>", lambda event: self.invoice_manager.valider())
 
         # --- Initialisation des modules UI ---
         self.login_ui = LoginUI(self)
@@ -137,11 +151,27 @@ class App(ctk.CTk):
         # Ce temps ne sera visible que dans la console (mode debug)
         print(f"Temps de chargement de l'initialisation : {end_time - start_time:.2f} secondes.")
 
-        progress_bar.stop()
-        loading_frame.destroy()
+        self.splash_progress.stop()
+        self.splash_frame.destroy()
+
+        # Restauration de la fenêtre principale
+        self.overrideredirect(False)
+        self.attributes('-topmost', False)
+        self.title("Opeyrateur - A. Peyrat")
+        
+        # Configuration de la grille principale
+        self.grid_rowconfigure(0, weight=1) # Ligne pour le contenu principal
+        self.grid_rowconfigure(1, weight=0) # Ligne pour la barre de statut
+        self.grid_columnconfigure(0, weight=1)
 
         self.geometry("1920x1080")
         self.resizable(False, False)
+        self.withdraw()
+        
+        # Animation de fondu (Fade-in)
+        self.attributes("-alpha", 0.0)
+        self.deiconify()
+        self._animate_fade_in()
 
         self.login_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.login_frame.grid(row=0, column=0, sticky="nsew")
@@ -247,10 +277,10 @@ class App(ctk.CTk):
             def on_leave(event, frame=invoice_frame, orig=original_color):
                 frame.configure(fg_color=orig)
 
-            invoice_frame.bind("<Enter>", on_enter)
-            invoice_frame.bind("<Leave>", on_leave)
-            info_label.bind("<Enter>", on_enter)
-            status_indicator.bind("<Enter>", on_enter)
+            # Applique les événements sur le cadre et ses enfants pour gérer correctement la sortie de la souris
+            for widget in [invoice_frame, info_label, status_indicator]:
+                widget.bind("<Enter>", on_enter)
+                widget.bind("<Leave>", on_leave)
             
             # Clic droit sur le cadre ou le texte pour ouvrir le menu
             invoice_frame.bind("<Button-3>", lambda event, data=row_data: self.invoice_actions.show_invoice_context_menu(event, data))
@@ -291,7 +321,7 @@ class App(ctk.CTk):
             self.current_page += 1
             self._display_invoices_in_frame(self.current_search_results_df, self.results_frame.cget("label_text"))
 
-    def _create_tool_wrapper(self, title):
+    def _create_tool_wrapper(self, title, scrollable=False):
         """Crée un cadre contenant une barre de titre avec bouton Retour et un cadre de contenu."""
         wrapper = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         
@@ -309,7 +339,10 @@ class App(ctk.CTk):
         line = ctk.CTkFrame(wrapper, height=1, fg_color=["#E0E0E0", "#2A2A2A"])
         line.pack(fill="x", side="top")
         
-        content = ctk.CTkFrame(wrapper, corner_radius=0, fg_color="transparent")
+        if scrollable:
+            content = ctk.CTkScrollableFrame(wrapper, corner_radius=0, fg_color="transparent")
+        else:
+            content = ctk.CTkFrame(wrapper, corner_radius=0, fg_color="transparent")
         content.pack(fill="both", expand=True)
         
         wrapper.content_frame = content
@@ -327,6 +360,11 @@ class App(ctk.CTk):
             self.invoice_manager.update_form(self.prestation.get())
             self.invoice_manager.toggle_payment_date_field()
             self.is_new_invoice_tab_initialized = True
+        
+        if wrapper == self.new_invoice_wrapper:
+            # Place le curseur dans le champ Prénom après un court délai
+            self.after(100, lambda: self.prenom.focus_set())
+            
         elif wrapper == self.search_wrapper and not self.is_search_tab_initialized:
             from .search_tab import create_search_tab
             create_search_tab(self)
@@ -593,6 +631,15 @@ class App(ctk.CTk):
                 refresh_expenses_list(self)
             
             self._update_dashboard_kpis()
+
+    def _animate_fade_in(self, alpha=0.0):
+        """Gère l'animation de fondu à l'ouverture."""
+        if alpha < 1.0:
+            alpha += 0.05
+            self.attributes("-alpha", alpha)
+            self.after(15, lambda: self._animate_fade_in(alpha))
+        else:
+            self.attributes("-alpha", 1.0)
 
 if __name__ == "__main__":
     app = App()

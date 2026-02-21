@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from tkinter import messagebox
+import threading
 from . import pin_manager
 
 class LoginUI:
@@ -51,15 +52,58 @@ class LoginUI:
         if pin_manager.verify_pin(pin):
             self.app.login_frame.grid_forget()
             self.app.menu_frame.grid(row=0, column=0, sticky="nsew")
-            # Import différé pour éviter les cycles si dashboard a besoin de app
-            from .dashboard import update_dashboard_kpis
-            update_dashboard_kpis(self.app)
             
-            # Vérification des frais automatiques (1er du mois)
-            self.app.check_automatic_expenses()
+            # Force l'affichage immédiat du menu
+            self.app.update()
+            
+            # Lance le chargement des données en différé pour ne pas figer l'interface
+            self.app.after(100, self._perform_post_login_tasks)
         else:
             self.app.pin_entry.delete(0, 'end')
             messagebox.showerror("Erreur", "Code PIN incorrect.")
+
+    def _perform_post_login_tasks(self):
+        """Charge les données et met à jour le tableau de bord après la connexion."""
+        # Création de la fenêtre de chargement
+        self.loading_window = ctk.CTkToplevel(self.app)
+        self.loading_window.title("Chargement")
+        self.loading_window.geometry("300x150")
+        self.loading_window.transient(self.app)
+        self.loading_window.grab_set()
+        self.loading_window.resizable(False, False)
+        
+        # Centrage
+        self.loading_window.update_idletasks()
+        x = self.app.winfo_x() + (self.app.winfo_width() // 2) - (300 // 2)
+        y = self.app.winfo_y() + (self.app.winfo_height() // 2) - (150 // 2)
+        self.loading_window.geometry(f"+{x}+{y}")
+        
+        ctk.CTkLabel(self.loading_window, text="Chargement des données...", font=self.app.font_large).pack(pady=(20, 10))
+        
+        progress = ctk.CTkProgressBar(self.loading_window, width=200, mode="indeterminate")
+        progress.pack(pady=10)
+        progress.start()
+        
+        # Lancement du chargement en arrière-plan
+        threading.Thread(target=self._load_data_thread, daemon=True).start()
+
+    def _load_data_thread(self):
+        try:
+            from .dashboard import load_dashboard_data
+            data = load_dashboard_data(self.app)
+            self.app.after(0, lambda: self._finish_loading(data))
+        except Exception as e:
+            self.app.after(0, lambda: messagebox.showerror("Erreur", f"Erreur chargement: {e}"))
+            if hasattr(self, 'loading_window'): self.app.after(0, self.loading_window.destroy)
+
+    def _finish_loading(self, data):
+        from .dashboard import update_dashboard_views
+        update_dashboard_views(self.app, data)
+        
+        if hasattr(self, 'loading_window') and self.loading_window.winfo_exists():
+            self.loading_window.destroy()
+            
+        self.app.check_automatic_expenses()
 
     def _on_numpad_press(self, digit):
         self.app.pin_entry.insert(ctk.END, digit)
