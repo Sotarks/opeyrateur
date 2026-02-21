@@ -22,52 +22,95 @@ class SettingsUI:
         """Ouvre la fenêtre des réglages."""
         settings_window = ctk.CTkToplevel(self.app)
         settings_window.title("Réglages")
-        settings_window.geometry("500x600")
+        settings_window.geometry("1000x700")
         settings_window.transient(self.app)
         settings_window.grab_set()
 
-        # --- Cadre principal avec barre de défilement ---
-        scroll_frame = ctk.CTkScrollableFrame(settings_window, label_text="Réglages")
-        scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        # Configuration de la grille : Sidebar (fixe) + Contenu (extensible)
+        settings_window.grid_columnconfigure(0, weight=0, minsize=250)
+        settings_window.grid_columnconfigure(1, weight=1)
+        settings_window.grid_rowconfigure(0, weight=1)
 
-        ctk.CTkLabel(scroll_frame, text="Personnalisation", font=self.app.font_large).pack(pady=(10, 10), anchor="w", padx=20)
-        ctk.CTkButton(scroll_frame, text="Modifier les informations des PDF", font=self.app.font_button, command=self._open_pdf_settings_window).pack(pady=10, padx=20, fill="x")
-        ctk.CTkButton(scroll_frame, text="Changer le code PIN", font=self.app.font_button, command=self._open_change_pin_window).pack(pady=10, padx=20, fill="x")
+        # =================================================================================
+        # 1. SIDEBAR (GAUCHE)
+        # =================================================================================
+        sidebar = ctk.CTkFrame(settings_window, corner_radius=0, fg_color=("gray90", "gray16"))
+        sidebar.grid(row=0, column=0, sticky="nsew")
+        sidebar.grid_rowconfigure(1, weight=1) # Spacer
 
-        ctk.CTkLabel(scroll_frame, text="Gestion des Données", font=self.app.font_large).pack(pady=(20, 10), anchor="w", padx=20)
-        ctk.CTkButton(scroll_frame, text="Ouvrir le dossier de l'application", font=self.app.font_button, command=self._open_app_directory).pack(pady=10, padx=20, fill="x")
+        ctk.CTkLabel(sidebar, text="Paramètres", font=ctk.CTkFont(family="Montserrat", size=24, weight="bold")).pack(pady=(30, 10), padx=20, anchor="w")
+        ctk.CTkLabel(sidebar, text="Configuration & Maintenance", font=ctk.CTkFont(family="Montserrat", size=12), text_color="gray").pack(padx=20, anchor="w")
 
-        ctk.CTkLabel(scroll_frame, text="Outils de Maintenance", font=self.app.font_large).pack(pady=(20, 10), anchor="w", padx=20)
-        ctk.CTkLabel(scroll_frame, text="Ces outils permettent de corriger des problèmes de données.", font=self.app.font_regular).pack(pady=(0, 10), padx=20, anchor="w")
+        # Bouton Fermer en bas
+        ctk.CTkButton(sidebar, text="Fermer", command=settings_window.destroy, fg_color="transparent", border_width=1, text_color=("gray10", "gray90"), font=self.app.font_button, height=40).pack(side="bottom", fill="x", padx=20, pady=20)
+
+        # =================================================================================
+        # 2. CONTENU PRINCIPAL (DROITE)
+        # =================================================================================
+        content_frame = ctk.CTkScrollableFrame(settings_window, corner_radius=0, fg_color="transparent")
+        content_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         
-        ctk.CTkButton(scroll_frame, text="Régénérer les PDF des factures", font=self.app.font_button, command=self._regenerate_all_invoice_pdfs).pack(pady=10, padx=20, fill="x")
-        ctk.CTkButton(scroll_frame, text="Regénérer les fichiers Excel des factures", font=self.app.font_button, command=self._regenerate_all_invoices_excel).pack(pady=10, padx=20, fill="x")
+        def create_section_card(parent, title, icon="⚙️", color="#3498db"):
+            card = ctk.CTkFrame(parent, corner_radius=15, fg_color=("white", "gray20"))
+            card.pack(fill="x", pady=(0, 20))
+            
+            header = ctk.CTkFrame(card, fg_color="transparent")
+            header.pack(fill="x", padx=20, pady=(15, 10))
+            
+            ctk.CTkLabel(header, text=icon, font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
+            ctk.CTkLabel(header, text=title, font=ctk.CTkFont(family="Montserrat", size=18, weight="bold"), text_color=color).pack(side="left")
+            
+            body = ctk.CTkFrame(card, fg_color="transparent")
+            body.pack(fill="x", padx=20, pady=(0, 20))
+            return body
 
-        ctk.CTkLabel(scroll_frame, text="Debug / Tests", font=self.app.font_large).pack(pady=(20, 10), anchor="w", padx=20)
+        # 1. Personnalisation
+        perso_body = create_section_card(content_frame, "Personnalisation", "🎨", "#3498db")
+        ctk.CTkButton(perso_body, text="Modifier les informations des PDF", font=self.app.font_button, command=self._open_pdf_settings_window, height=40).pack(fill="x", pady=5)
+        ctk.CTkButton(perso_body, text="Changer le code PIN", font=self.app.font_button, command=self._open_change_pin_window, height=40).pack(fill="x", pady=5)
+
+        # 2. Données
+        data_body = create_section_card(content_frame, "Gestion des Données", "💾", "#9b59b6")
+        ctk.CTkButton(data_body, text="Ouvrir le dossier de l'application", font=self.app.font_button, command=self._open_app_directory, height=40).pack(fill="x", pady=5)
+
+        # 3. Maintenance
+        maint_body = create_section_card(content_frame, "Maintenance", "🛠️", "#f39c12")
+        ctk.CTkLabel(maint_body, text="Outils de correction en cas de problème d'affichage ou de données.", font=self.app.font_regular, text_color="gray").pack(anchor="w", pady=(0, 10))
         
-        debug_frame = ctk.CTkFrame(scroll_frame, fg_color="transparent")
-        debug_frame.pack(fill="x", padx=20, pady=10)
+        btn_grid = ctk.CTkFrame(maint_body, fg_color="transparent")
+        btn_grid.pack(fill="x")
+        ctk.CTkButton(btn_grid, text="Régénérer PDF Factures", font=self.app.font_button, command=self._regenerate_all_invoice_pdfs, height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(btn_grid, text="Régénérer Excel Factures", font=self.app.font_button, command=self._regenerate_all_invoices_excel, height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+        # 4. Debug
+        debug_body = create_section_card(content_frame, "Debug / Tests", "🐞", "#7f8c8d")
         
-        ctk.CTkLabel(debug_frame, text="Nombre :").pack(side="left", padx=(0, 10))
-        debug_count_entry = ctk.CTkEntry(debug_frame, width=60)
-        debug_count_entry.pack(side="left", padx=(0, 10))
+        debug_ctrl = ctk.CTkFrame(debug_body, fg_color="transparent")
+        debug_ctrl.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(debug_ctrl, text="Nombre d'éléments à générer :", font=self.app.font_regular).pack(side="left")
+        debug_count_entry = ctk.CTkEntry(debug_ctrl, width=60)
+        debug_count_entry.pack(side="left", padx=10)
         debug_count_entry.insert(0, "5")
         
-        debug_btns_frame = ctk.CTkFrame(scroll_frame, fg_color="transparent")
-        debug_btns_frame.pack(fill="x", padx=20, pady=(0, 10))
+        debug_btns = ctk.CTkFrame(debug_body, fg_color="transparent")
+        debug_btns.pack(fill="x")
+        ctk.CTkButton(debug_btns, text="Générer Factures Test", font=self.app.font_button, command=lambda: self._generate_random_invoices(debug_count_entry, settings_window), height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(debug_btns, text="Générer Frais Test", font=self.app.font_button, command=lambda: self._generate_random_expenses(debug_count_entry, settings_window), height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
-        ctk.CTkButton(debug_btns_frame, text="Générer Factures", font=self.app.font_button, command=lambda: self._generate_random_invoices(debug_count_entry, settings_window)).pack(side="left", fill="x", expand=True, padx=(0, 5))
-        ctk.CTkButton(debug_btns_frame, text="Générer Frais", font=self.app.font_button, command=lambda: self._generate_random_expenses(debug_count_entry, settings_window)).pack(side="left", fill="x", expand=True, padx=(5, 0))
-
-        ctk.CTkLabel(scroll_frame, text="Zone de Danger", font=self.app.font_large, text_color="#E53935").pack(pady=(20, 10), anchor="w", padx=20)
-        ctk.CTkLabel(scroll_frame, text="Ces actions sont irréversibles.", font=self.app.font_regular).pack(pady=(0, 20), padx=20, anchor="w")
-
-        danger_button_color = "#D32F2F"
-        danger_hover_color = "#B71C1C"
-        ctk.CTkButton(scroll_frame, text="Supprimer TOUTES les données", font=self.app.font_button, command=self._delete_all_data, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
-        ctk.CTkButton(scroll_frame, text="Supprimer toutes les FACTURES", font=self.app.font_button, command=self._delete_invoices, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
-        ctk.CTkButton(scroll_frame, text="Supprimer tous les FRAIS", font=self.app.font_button, command=self._delete_expenses, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
-        ctk.CTkButton(scroll_frame, text="Supprimer tous les budgets", font=self.app.font_button, command=self._delete_budgets, fg_color=danger_button_color, hover_color=danger_hover_color).pack(pady=10, padx=20, fill="x")
+        # 5. Zone de Danger
+        danger_body = create_section_card(content_frame, "Zone de Danger", "☢️", "#e74c3c")
+        ctk.CTkLabel(danger_body, text="Attention : Ces actions sont irréversibles.", font=self.app.font_bold, text_color="#e74c3c").pack(anchor="w", pady=(0, 10))
+        
+        danger_style = {"fg_color": ("#ffebee", "#3e2723"), "text_color": "#e74c3c", "hover_color": ("#ffcdd2", "#5d4037"), "height": 40, "font": self.app.font_button}
+        
+        ctk.CTkButton(danger_body, text="Supprimer TOUTES les données", command=self._delete_all_data, **danger_style).pack(fill="x", pady=5)
+        
+        danger_grid = ctk.CTkFrame(danger_body, fg_color="transparent")
+        danger_grid.pack(fill="x", pady=5)
+        ctk.CTkButton(danger_grid, text="Supprimer Factures", command=self._delete_invoices, **danger_style).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(danger_grid, text="Supprimer Frais", command=self._delete_expenses, **danger_style).pack(side="left", fill="x", expand=True, padx=5)
+        
+        ctk.CTkButton(danger_body, text="Supprimer Budgets", command=self._delete_budgets, **danger_style).pack(fill="x", pady=5)
 
     def _open_app_directory(self):
         try:

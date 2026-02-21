@@ -2,138 +2,146 @@ import customtkinter as ctk
 import os
 from PIL import Image
 from .utils import resource_path
-from .utils import ToolTip
 
 def create_menu(app):
     """Construit l'interface du menu principal."""
-    # Configure la grille principale pour centrer le contenu
-    app.menu_frame.grid_columnconfigure(0, weight=1)
-    app.menu_frame.grid_rowconfigure(1, weight=1)
+    # Configuration de la grille principale : Sidebar (fixe) + Contenu (extensible)
+    app.menu_frame.grid_columnconfigure(0, weight=0, minsize=280) # Sidebar
+    app.menu_frame.grid_columnconfigure(1, weight=1) # Dashboard
+    app.menu_frame.grid_rowconfigure(0, weight=1)
 
-    # --- Cadre pour le logo et le titre en haut ---
-    header_frame = ctk.CTkFrame(app.menu_frame, fg_color="transparent")
-    header_frame.grid(row=0, column=0, pady=(20, 10), sticky="ew")
-    header_frame.grid_columnconfigure(0, weight=1)
+    # =================================================================================
+    # 1. SIDEBAR DE NAVIGATION (GAUCHE)
+    # =================================================================================
+    sidebar = ctk.CTkFrame(app.menu_frame, corner_radius=0, fg_color=("gray90", "gray16"))
+    sidebar.grid(row=0, column=0, sticky="nsew")
+    sidebar.grid_columnconfigure(0, weight=1)
+    sidebar.grid_rowconfigure(10, weight=1) # Spacer pour pousser les réglages en bas
 
+    # --- Logo & Titre ---
+    logo_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+    logo_frame.grid(row=0, column=0, pady=(30, 20), sticky="ew")
+    
     try:
         logo_path = resource_path(os.path.join("src", "logo.png"))
         if os.path.exists(logo_path):
-            # Charge l'image avec PIL et crée un CTkImage pour une meilleure qualité
             pil_image = Image.open(logo_path)
-            my_image = ctk.CTkImage(light_image=pil_image, dark_image=pil_image, size=(150, 150))
-            logo_label = ctk.CTkLabel(header_frame, image=my_image, text="")
-            logo_label.pack()
+            my_image = ctk.CTkImage(light_image=pil_image, dark_image=pil_image, size=(100, 100))
+            ctk.CTkLabel(logo_frame, image=my_image, text="").pack()
     except Exception as e:
         print(f"Erreur chargement logo menu: {e}")
 
-    title_label = ctk.CTkLabel(header_frame, text="L'Opeyrateur", font=app.font_title)
-    title_label.pack(pady=(10, 10))
+    ctk.CTkLabel(logo_frame, text="L'Opeyrateur", font=ctk.CTkFont(family="Montserrat", size=24, weight="bold")).pack(pady=(10, 0))
+    ctk.CTkLabel(logo_frame, text="Gestion de cabinet", font=ctk.CTkFont(family="Montserrat", size=12), text_color="gray").pack()
 
-    # --- Cadre principal pour centrer les deux colonnes ---
-    center_frame = ctk.CTkFrame(app.menu_frame, fg_color="transparent")
-    center_frame.grid(row=1, column=0, sticky="") # sticky="" dans une cellule qui s'étend va centrer le widget
+    # --- Menu de Navigation ---
+    nav_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+    nav_frame.grid(row=1, column=0, sticky="ew", padx=20)
+    
+    # Style des boutons du menu
+    btn_params = {
+        "font": ctk.CTkFont(family="Montserrat", size=14, weight="bold"),
+        "fg_color": "transparent",
+        "text_color": ("gray20", "gray90"),
+        "hover_color": ("gray80", "gray25"),
+        "anchor": "w",
+        "height": 45,
+        "corner_radius": 8
+    }
 
-    # --- Colonne de gauche pour les boutons ---
-    buttons_frame = ctk.CTkFrame(center_frame, fg_color="transparent")
-    buttons_frame.grid(row=0, column=0, sticky="n", padx=(20, 10), pady=20)
+    ctk.CTkButton(nav_frame, text="📝  Nouvelle Facture", command=lambda: app._show_tool(app.new_invoice_wrapper), **btn_params).pack(fill="x", pady=2)
+    ctk.CTkButton(nav_frame, text="🔍  Rechercher", command=lambda: app._show_tool(app.search_wrapper), **btn_params).pack(fill="x", pady=2)
+    ctk.CTkButton(nav_frame, text="💰  Budget & Analyse", command=lambda: app._show_tool(app.budget_wrapper), **btn_params).pack(fill="x", pady=2)
+    ctk.CTkButton(nav_frame, text="💸  Gestion des Frais", command=lambda: app._show_tool(app.expenses_wrapper), **btn_params).pack(fill="x", pady=2)
+    ctk.CTkButton(nav_frame, text="📄  Attestation", command=lambda: app._show_tool(app.attestation_wrapper), **btn_params).pack(fill="x", pady=2)
 
-    # --- Colonne de droite pour le tableau de bord (KPIs) ---
-    dashboard_frame = ctk.CTkFrame(center_frame, corner_radius=10)
-    dashboard_frame.grid(row=0, column=1, sticky="n", padx=(10, 20), pady=10)
-    # Les colonnes et lignes du dashboard ne doivent pas s'étirer
-    dashboard_frame.grid_columnconfigure((0, 1), weight=0)
-    dashboard_frame.grid_rowconfigure((0, 1), weight=0)
+    # --- Bas de Sidebar (Réglages & Quitter) ---
+    bottom_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+    bottom_frame.grid(row=11, column=0, sticky="ew", padx=20, pady=20)
+    
+    ctk.CTkButton(bottom_frame, text="⚙️  Réglages", command=app._open_settings_window, **btn_params).pack(fill="x", pady=2)
+    
+    quit_btn_params = btn_params.copy()
+    quit_btn_params.update({"fg_color": ("#ffebee", "#3e2723"), "text_color": "#e74c3c", "hover_color": ("#ffcdd2", "#5d4037")})
+    ctk.CTkButton(bottom_frame, text="🚪  Quitter", command=app.destroy, **quit_btn_params).pack(fill="x", pady=(10, 0))
 
-    # --- Fonctions pour l'effet de survol et le clic ---
+    # =================================================================================
+    # 2. TABLEAU DE BORD (DROITE)
+    # =================================================================================
+    content = ctk.CTkFrame(app.menu_frame, corner_radius=0, fg_color="transparent")
+    content.grid(row=0, column=1, sticky="nsew", padx=40, pady=40)
+    content.grid_columnconfigure((0, 1), weight=1)
+
+    # Titre Dashboard
+    ctk.CTkLabel(content, text="Tableau de Bord", font=ctk.CTkFont(family="Montserrat", size=28, weight="bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 20))
+
+    # --- Fonctions KPI ---
     def on_kpi_enter(event, frame):
-        frame.configure(fg_color=("gray85", "gray25"))
+        frame.configure(border_color="gray70")
 
     def on_kpi_leave(event, frame):
-        # Utilise la couleur par défaut du thème pour les CTkFrame
-        frame.configure(fg_color=ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        frame.configure(border_color=("gray90", "gray20"))
 
-    # KPI 1: CA ce mois-ci
-    kpi1_frame = ctk.CTkFrame(dashboard_frame, corner_radius=10, cursor="hand2", width=220, height=100)
-    kpi1_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
-    kpi1_frame.grid_columnconfigure(0, weight=1)
-    kpi1_title = ctk.CTkLabel(kpi1_frame, text="CA (encaissé) ce mois-ci", font=app.font_regular, text_color="gray")
-    kpi1_title.pack(pady=(10, 0), expand=True)
-    app.kpi_revenue_label = ctk.CTkLabel(kpi1_frame, text="...", font=ctk.CTkFont(size=22, weight="bold"), text_color="#2ecc71")
-    app.kpi_revenue_label.pack(pady=(0, 10), expand=True)
-    for widget in [kpi1_frame, kpi1_title, app.kpi_revenue_label]:
-        widget.bind("<Enter>", lambda e, f=kpi1_frame: on_kpi_enter(e, f))
-        widget.bind("<Leave>", lambda e, f=kpi1_frame: on_kpi_leave(e, f))
-        widget.bind("<Button-1>", lambda e: app._on_kpi_click("revenue_month"))
+    def create_kpi_card(parent, row, col, title, value_attr, color, icon="📊", command_key=None):
+        card = ctk.CTkFrame(parent, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"), cursor="hand2")
+        card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+        card.grid_columnconfigure(0, weight=1)
+        
+        # Header (Icon + Title)
+        header = ctk.CTkFrame(card, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=(15, 5))
+        ctk.CTkLabel(header, text=icon, font=ctk.CTkFont(size=20)).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(header, text=title, font=ctk.CTkFont(family="Montserrat", size=13, weight="bold"), text_color="gray").pack(side="left")
+        
+        # Value
+        value_label = ctk.CTkLabel(card, text="...", font=ctk.CTkFont(family="Montserrat", size=28, weight="bold"), text_color=color)
+        value_label.pack(padx=20, pady=(0, 15), anchor="w")
+        
+        # Assign to app attribute
+        setattr(app, value_attr, value_label)
+        
+        # Bindings
+        for w in [card, header, value_label] + header.winfo_children():
+            w.bind("<Enter>", lambda e, f=card: on_kpi_enter(e, f))
+            w.bind("<Leave>", lambda e, f=card: on_kpi_leave(e, f))
+            if command_key:
+                w.bind("<Button-1>", lambda e: app._on_kpi_click(command_key))
+        
+        return card
 
-    # KPI 2: Consultations ce mois-ci
-    kpi2_frame = ctk.CTkFrame(dashboard_frame, corner_radius=10, cursor="hand2", width=220, height=100)
-    kpi2_frame.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-    kpi2_frame.grid_columnconfigure(0, weight=1)
-    kpi2_title = ctk.CTkLabel(kpi2_frame, text="Consultations ce mois-ci", font=app.font_regular, text_color="gray")
-    kpi2_title.pack(pady=(10, 0), expand=True)
-    app.kpi_sessions_label = ctk.CTkLabel(kpi2_frame, text="...", font=ctk.CTkFont(size=22, weight="bold"))
-    app.kpi_sessions_label.pack(pady=(0, 10), expand=True)
-    for widget in [kpi2_frame, kpi2_title, app.kpi_sessions_label]:
-        widget.bind("<Enter>", lambda e, f=kpi2_frame: on_kpi_enter(e, f))
-        widget.bind("<Leave>", lambda e, f=kpi2_frame: on_kpi_leave(e, f))
-        widget.bind("<Button-1>", lambda e: app._on_kpi_click("sessions_month"))
+    # --- Grille des KPIs ---
+    create_kpi_card(content, 1, 0, "CA Encaissé (Mois)", "kpi_revenue_label", "#2ecc71", "📈", "revenue_month")
+    create_kpi_card(content, 1, 1, "Consultations (Mois)", "kpi_sessions_label", ("gray10", "gray90"), "users", "sessions_month") # users icon fallback text
+    create_kpi_card(content, 2, 0, "Total Impayés", "kpi_unpaid_label", "#e74c3c", "⚠️", "unpaid")
+    create_kpi_card(content, 2, 1, "Dépenses (Mois)", "kpi_expenses_label", "#f39c12", "📉", "expenses_month")
 
-    # KPI 3: Total Impayés
-    kpi3_frame = ctk.CTkFrame(dashboard_frame, corner_radius=10, cursor="hand2", width=220, height=100)
-    kpi3_frame.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
-    kpi3_frame.grid_columnconfigure(0, weight=1)
-    kpi3_title = ctk.CTkLabel(kpi3_frame, text="Total des impayés", font=app.font_regular, text_color="gray")
-    kpi3_title.pack(pady=(10, 0), expand=True)
-    app.kpi_unpaid_label = ctk.CTkLabel(kpi3_frame, text="...", font=ctk.CTkFont(size=22, weight="bold"), text_color="#e74c3c")
-    app.kpi_unpaid_label.pack(pady=(0, 10), expand=True)
-    for widget in [kpi3_frame, kpi3_title, app.kpi_unpaid_label]:
-        widget.bind("<Enter>", lambda e, f=kpi3_frame: on_kpi_enter(e, f))
-        widget.bind("<Leave>", lambda e, f=kpi3_frame: on_kpi_leave(e, f))
-        widget.bind("<Button-1>", lambda e: app._on_kpi_click("unpaid"))
+    # --- Section Santé Financière ---
+    ctk.CTkLabel(content, text="Santé Financière", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=3, column=0, columnspan=2, sticky="w", pady=(30, 10))
 
-    # KPI 4: Dépenses ce mois-ci
-    kpi4_frame = ctk.CTkFrame(dashboard_frame, corner_radius=10, cursor="hand2", width=220, height=100)
-    kpi4_frame.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-    kpi4_frame.grid_columnconfigure(0, weight=1)
-    kpi4_title = ctk.CTkLabel(kpi4_frame, text="Dépenses ce mois-ci", font=app.font_regular, text_color="gray")
-    kpi4_title.pack(pady=(10, 0), expand=True)
-    app.kpi_expenses_label = ctk.CTkLabel(kpi4_frame, text="...", font=ctk.CTkFont(size=22, weight="bold"), text_color="#f39c12")
-    app.kpi_expenses_label.pack(pady=(0, 10), expand=True)
-    for widget in [kpi4_frame, kpi4_title, app.kpi_expenses_label]:
-        widget.bind("<Enter>", lambda e, f=kpi4_frame: on_kpi_enter(e, f))
-        widget.bind("<Leave>", lambda e, f=kpi4_frame: on_kpi_leave(e, f))
-        widget.bind("<Button-1>", lambda e: app._on_kpi_click("expenses_month"))
-
-    # --- Section Salaire / Répartition (Nouveau) ---
-    salary_frame = ctk.CTkFrame(dashboard_frame, corner_radius=10)
-    salary_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+    salary_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
+    salary_frame.grid(row=4, column=0, columnspan=2, padx=10, sticky="ew")
+    salary_frame.grid_columnconfigure(1, weight=1)
     
-    ctk.CTkLabel(salary_frame, text="Salaire Net Disponible (Mensuel)", font=app.font_bold, text_color="gray").pack(pady=(10, 0))
-    app.kpi_salary_label = ctk.CTkLabel(salary_frame, text="...", font=ctk.CTkFont(size=24, weight="bold"), text_color="#3498db")
-    app.kpi_salary_label.pack(pady=(0, 5))
+    # Icone & Titre
+    info_box = ctk.CTkFrame(salary_frame, fg_color="transparent")
+    info_box.pack(side="left", padx=20, pady=20)
+    ctk.CTkLabel(info_box, text="💰", font=ctk.CTkFont(size=30)).pack()
     
-    app.kpi_salary_details = ctk.CTkLabel(salary_frame, text="...", font=ctk.CTkFont(size=11), text_color="gray")
-    app.kpi_salary_details.pack(pady=(0, 10))
+    # Détails
+    details_box = ctk.CTkFrame(salary_frame, fg_color="transparent")
+    details_box.pack(side="left", fill="x", expand=True, padx=10, pady=20)
+    
+    ctk.CTkLabel(details_box, text="Salaire Net Disponible (Mensuel)", font=ctk.CTkFont(family="Montserrat", size=14, weight="bold"), text_color="gray").pack(anchor="w")
+    app.kpi_salary_label = ctk.CTkLabel(details_box, text="...", font=ctk.CTkFont(family="Montserrat", size=32, weight="bold"), text_color="#3498db")
+    app.kpi_salary_label.pack(anchor="w")
+    app.kpi_salary_details = ctk.CTkLabel(details_box, text="...", font=ctk.CTkFont(size=12), text_color="gray")
+    app.kpi_salary_details.pack(anchor="w")
     
     # Barre de progression vers l'objectif
-    app.salary_progress_bar = ctk.CTkProgressBar(salary_frame, width=250, height=12, corner_radius=6)
-    app.salary_progress_bar.pack(pady=(0, 5))
+    progress_box = ctk.CTkFrame(salary_frame, fg_color="transparent")
+    progress_box.pack(side="right", padx=30, pady=20)
+    
+    ctk.CTkLabel(progress_box, text="Objectif : 2 000 €", font=ctk.CTkFont(size=12), text_color="gray").pack(anchor="e", pady=(0, 5))
+    app.salary_progress_bar = ctk.CTkProgressBar(progress_box, width=200, height=12, corner_radius=6)
+    app.salary_progress_bar.pack()
     app.salary_progress_bar.set(0)
-    
-    ctk.CTkLabel(salary_frame, text="Objectif : 2 000 € / mois", font=ctk.CTkFont(size=10), text_color="gray").pack(pady=(0, 10))
-    
-    ToolTip(salary_frame, "Calcul basé sur la règle des 3 tiers pour le mois en cours :\n1/3 Charges, 1/3 Frais, 1/3 Salaire.\nLe montant affiché est ce qu'il reste après déduction\ndes frais réels du mois et des provisions nécessaires.")
-
-    # Boutons
-    btn_width = 300
-    btn_height = 50
-
-    ctk.CTkButton(buttons_frame, text="📝 Nouvelle Facture", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.new_invoice_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="🔍 Rechercher", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.search_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="💰 Budget", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.budget_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="💸 Frais", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.expenses_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="📄 Attestation", font=app.font_button, width=btn_width, height=btn_height, command=lambda: app._show_tool(app.attestation_wrapper)).pack(pady=5, fill="x")
-    ctk.CTkButton(buttons_frame, text="🚪 Quitter", font=app.font_button, width=btn_width, height=btn_height, fg_color="#D32F2F", hover_color="#B71C1C", command=app.destroy).pack(pady=(20, 0), fill="x")
-
-    # Bouton des paramètres en bas à droite de la fenêtre
-    ctk.CTkButton(center_frame, text="⚙️", font=ctk.CTkFont(family="Montserrat", size=24), width=50, height=50, command=app._open_settings_window, fg_color="transparent", text_color=("#1E1E1E", "#E0E0E0")).grid(row=1, column=1, sticky="se", padx=20, pady=20)

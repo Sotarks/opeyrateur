@@ -209,6 +209,7 @@ class App(ctk.CTk):
 
     def _display_invoices_in_frame(self, dataframe, label):
         """Vide et remplit le cadre de résultats avec les factures d'un dataframe."""
+        import pandas as pd
         self.current_search_results_df = dataframe
         
         for widget in self.results_frame.winfo_children():
@@ -242,37 +243,48 @@ class App(ctk.CTk):
         page_data = dataframe.iloc[start_idx:end_idx]
 
         for _, row in page_data.iterrows():
-            invoice_frame = ctk.CTkFrame(self.results_frame, corner_radius=6)
-            invoice_frame.pack(fill="x", pady=(0, 8), padx=5)
+            # --- Design Compact (Liste) ---
+            invoice_frame = ctk.CTkFrame(self.results_frame, corner_radius=8, fg_color=("white", "gray20"), border_width=1, border_color=("gray90", "gray30"))
+            invoice_frame.pack(fill="x", pady=(0, 2), padx=3)
             
-            # Utilise grid pour que les boutons ne soient pas cachés
-            invoice_frame.grid_columnconfigure(0, weight=0) # Colonne pour l'indicateur
-            invoice_frame.grid_columnconfigure(1, weight=1) # La colonne du texte s'étend
+            invoice_frame.grid_columnconfigure(2, weight=1) # La colonne détails s'étend pour pousser le reste à droite
             
             patient_name = f"{row.get('Prenom', '')} {row.get('Nom', '')}"
+            nom_enfant = row.get('Nom_Enfant', '')
+            if pd.notna(nom_enfant) and str(nom_enfant).strip():
+                patient_name += f" (Enfant : {nom_enfant})"
             payment_status = row.get('Methode_Paiement', 'N/A')
 
-            # Indicateur visuel de statut
+            # Couleurs selon statut
             status_color = "gray"
-            if payment_status == "Impayé":
-                invoice_frame.configure(border_width=1, border_color="#e74c3c")
-                status_color = "#e74c3c"
-            elif payment_status != "N/A":
-                status_color = "#2ecc71"
+            if payment_status == "Impayé": status_color = "#e74c3c"
+            elif payment_status != "N/A": status_color = "#2ecc71"
             
-            status_indicator = ctk.CTkLabel(invoice_frame, text="●", text_color=status_color, font=ctk.CTkFont(size=24))
-            status_indicator.grid(row=0, column=0, sticky="w", padx=(10, 0))
+            # 1. Barre de statut (Gauche)
+            status_strip = ctk.CTkFrame(invoice_frame, width=5, fg_color=status_color, corner_radius=0)
+            status_strip.grid(row=0, column=0, sticky="ns", padx=(0, 10))
 
-            info_text = f"ID: {row['ID']} | Date: {row['Date']} | Patient: {patient_name} | {row['Montant']:.2f} € | Statut: {payment_status}"
+            # 2. Nom Patient
+            name_label = ctk.CTkLabel(invoice_frame, text=patient_name, font=ctk.CTkFont(family="Montserrat", size=13, weight="bold"), anchor="w")
+            name_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=8)
             
-            info_label = ctk.CTkLabel(invoice_frame, text=info_text, anchor="w", font=self.font_regular)
-            info_label.grid(row=0, column=1, sticky="ew", padx=(5, 10), pady=10)
+            # 3. Détails (Date - Prestation)
+            details_text = f"{row['Date']}  |  {row.get('Prestation', 'Consultation')}"
+            details_label = ctk.CTkLabel(invoice_frame, text=details_text, font=ctk.CTkFont(family="Montserrat", size=12), text_color="gray", anchor="w")
+            details_label.grid(row=0, column=2, sticky="w", pady=8)
+            
+            # 4. Statut
+            status_label = ctk.CTkLabel(invoice_frame, text=payment_status.upper(), font=ctk.CTkFont(family="Montserrat", size=10, weight="bold"), text_color=status_color, anchor="e")
+            status_label.grid(row=0, column=3, sticky="e", padx=15, pady=8)
 
-            row_data = row.to_dict()
-            
+            # 5. Montant
+            amount_label = ctk.CTkLabel(invoice_frame, text=f"{row['Montant']:.2f} €", font=ctk.CTkFont(family="Montserrat", size=13, weight="bold"), text_color="#3498db", anchor="e")
+            amount_label.grid(row=0, column=4, sticky="e", padx=(0, 10), pady=8)
+
             # --- Effet de survol (Highlight) ---
+            row_data = row.to_dict()
             original_color = invoice_frame.cget("fg_color")
-            hover_color = ("gray75", "gray25") # Gris clair (Light) / Gris foncé (Dark)
+            hover_color = ("gray95", "gray25")
 
             def on_enter(event, frame=invoice_frame, color=hover_color):
                 frame.configure(fg_color=color)
@@ -281,19 +293,11 @@ class App(ctk.CTk):
                 frame.configure(fg_color=orig)
 
             # Applique les événements sur le cadre et ses enfants pour gérer correctement la sortie de la souris
-            for widget in [invoice_frame, info_label, status_indicator]:
+            for widget in [invoice_frame, status_strip, name_label, details_label, amount_label, status_label]:
                 widget.bind("<Enter>", on_enter)
                 widget.bind("<Leave>", on_leave)
-            
-            # Clic droit sur le cadre ou le texte pour ouvrir le menu
-            invoice_frame.bind("<Button-3>", lambda event, data=row_data: self.invoice_actions.show_invoice_context_menu(event, data))
-            info_label.bind("<Button-3>", lambda event, data=row_data: self.invoice_actions.show_invoice_context_menu(event, data))
-            status_indicator.bind("<Button-3>", lambda event, data=row_data: self.invoice_actions.show_invoice_context_menu(event, data))
-
-            # Double-clic pour ouvrir le PDF
-            invoice_frame.bind("<Double-1>", lambda event, data=row_data: self.invoice_actions.view_invoice_pdf(data))
-            info_label.bind("<Double-1>", lambda event, data=row_data: self.invoice_actions.view_invoice_pdf(data))
-            status_indicator.bind("<Double-1>", lambda event, data=row_data: self.invoice_actions.view_invoice_pdf(data))
+                widget.bind("<Button-3>", lambda event, data=row_data: self.invoice_actions.show_invoice_context_menu(event, data))
+                widget.bind("<Double-1>", lambda event, data=row_data: self.invoice_actions.view_invoice_pdf(data))
             
         if hasattr(self, 'pagination_frame'):
             self._update_pagination_controls(total_pages)
@@ -397,6 +401,9 @@ class App(ctk.CTk):
         elif wrapper == self.budget_wrapper:
             from .budget_tab import calculate_budget
             calculate_budget(self)
+        elif wrapper == self.attestation_wrapper:
+            from .attestation_tab import refresh_attestation_history
+            refresh_attestation_history(self)
 
     def _show_menu(self):
         self.new_invoice_wrapper.grid_forget()
@@ -431,6 +438,28 @@ class App(ctk.CTk):
         """Passe à l'onglet de recherche et met le focus sur le champ de saisie."""
         self._show_tool(self.search_wrapper)
         self.search_entry.focus()
+
+    def _filter_today(self):
+        """Affiche les factures de la date du jour."""
+        import pandas as pd
+        
+        now = datetime.now()
+        today_str = now.strftime("%d/%m/%Y")
+        year_str = str(now.year)
+        
+        # Charge les données de l'année en cours
+        df = self._load_data_with_cache(year=year_str)
+        
+        if df.empty:
+            self._display_invoices_in_frame(pd.DataFrame(), f"Aucune facture pour aujourd'hui ({today_str})")
+            return
+
+        # Filtrage
+        try:
+            results = df[df['Date'] == today_str]
+            self._display_invoices_in_frame(results, f"Factures du {today_str}")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du filtrage : {e}")
 
     def _apply_filters_and_search(self):
         """Applique tous les filtres de l'onglet recherche et affiche les résultats."""
@@ -479,10 +508,11 @@ class App(ctk.CTk):
 
             # 5. Filtrer par nom/prénom
             if query:
-                results['FullName'] = results['Prenom'].str.lower() + ' ' + results['Nom'].str.lower()
-                results = results[results['FullName'].str.contains(query, na=False)]
-                if 'FullName' in results.columns:
-                    results = results.drop(columns=['FullName'])
+                search_str = results['Prenom'].fillna('').astype(str).str.lower() + ' ' + results['Nom'].fillna('').astype(str).str.lower()
+                if 'Nom_Enfant' in results.columns:
+                    search_str += ' ' + results['Nom_Enfant'].fillna('').astype(str).str.lower()
+                
+                results = results[search_str.str.contains(query, na=False)]
 
             self._display_invoices_in_frame(results, "Résultats des filtres")
         except Exception as e:
@@ -629,6 +659,9 @@ class App(ctk.CTk):
             pdf_path = generate_attestation_pdf(data)
             self.invoice_actions.show_success_dialog(pdf_path)
             self.attestation_patient_name.delete(0, 'end') # Vide le nom pour la prochaine
+            
+            from .attestation_tab import refresh_attestation_history
+            refresh_attestation_history(self)
         except Exception as e:
             messagebox.showerror("Erreur de génération", f"Une erreur est survenue lors de la création du PDF :\n{e}")
 
