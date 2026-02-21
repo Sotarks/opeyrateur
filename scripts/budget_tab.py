@@ -319,19 +319,6 @@ def _export_fec(app):
     siret = pdf_info.get('siret', '').replace(' ', '')
     siren = siret[:9] if len(siret) >= 9 else "000000000"
     
-    # Nom du fichier selon norme : SirenFECYYYYMMDD.txt
-    filename = f"{siren}FEC{datetime.now().strftime('%Y%m%d')}.txt"
-    
-    filepath = filedialog.asksaveasfilename(
-        defaultextension=".txt",
-        initialfile=filename,
-        title="Enregistrer le fichier FEC (Format Légal)",
-        filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
-    )
-    
-    if not filepath:
-        return
-
     try:
         lines = []
         # En-tête officiel FEC (18 champs)
@@ -341,39 +328,68 @@ def _export_fec(app):
             "PieceRef", "PieceDate", "EcritureLib", "Debit", "Credit", 
             "EcritureLet", "DateLet", "ValidDate", "Montantdevise", "Idevise"
         ]
-        lines.append("\t".join(header))
+        lines.append("|".join(header))
         
         # Tri par date puis par ID pour la chronologie
         if 'Date' in df.columns:
             df['DateObj'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
             df = df.sort_values(by=['DateObj', 'ID'])
         
+        ecriture_counter = 0
         for _, row in df.iterrows():
             try:
+                ecriture_counter += 1
                 date_str = row['Date']
                 date_obj = datetime.strptime(date_str, '%d/%m/%Y')
                 fec_date = date_obj.strftime("%Y%m%d")
                 ref_piece = str(row['ID'])
+                ecriture_num = str(ecriture_counter)
                 
+                # Fonction de nettoyage
+                def clean_txt(t):
+                    return str(t).replace('|', ' ').replace('\n', ' ').replace('\r', '').strip() if t else ""
+
                 # Formatage montant (virgule comme séparateur décimal)
-                montant_float = float(row['Montant']) if pd.notnull(row['Montant']) else 0.0
+                raw_montant = row.get('Montant', 0.0)
+                if isinstance(raw_montant, str):
+                    raw_montant = raw_montant.replace(',', '.')
+                montant_float = float(raw_montant) if pd.notnull(raw_montant) else 0.0
+                
                 montant_str = f"{montant_float:.2f}".replace('.', ',')
                 zero_str = "0,00"
                 
-                nom_patient = f"{row.get('Prenom', '')} {row.get('Nom', '')}".strip()
+                nom_patient = f"{clean_txt(row.get('Prenom', ''))} {clean_txt(row.get('Nom', ''))}".strip()
                 libelle = f"Facture {ref_piece} - {nom_patient}"
+                libelle = libelle[:200]
                 
-                # Écriture 1 : Client (Debit 411)
-                line_client = ["VT", "Ventes", ref_piece, fec_date, "411000", "Clients", "", "", ref_piece, fec_date, libelle, montant_str, zero_str, "", "", fec_date, "", ""]
-                lines.append("\t".join(line_client))
+                # Préparation des lignes (Débit et Crédit)
+                line_client = ["VT", "Ventes", ecriture_num, fec_date, "411000", "Clients", "", "", ref_piece, fec_date, libelle, montant_str, zero_str, "", "", fec_date, "", ""]
+                line_prod = ["VT", "Ventes", ecriture_num, fec_date, "706000", "Prestations de services", "", "", ref_piece, fec_date, libelle, zero_str, montant_str, "", "", fec_date, "", ""]
                 
-                # Écriture 2 : Produit (Credit 706)
-                line_prod = ["VT", "Ventes", ref_piece, fec_date, "706000", "Prestations de services", "", "", ref_piece, fec_date, libelle, zero_str, montant_str, "", "", fec_date, "", ""]
-                lines.append("\t".join(line_prod))
+                # Ajout groupé pour garantir l'équilibre
+                lines.append("|".join(line_client))
+                lines.append("|".join(line_prod))
                 
             except Exception:
                 continue
         
+        # --- Validation du fichier FEC ---
+        from .utils import validate_fec_content
+        is_valid, errors = validate_fec_content(lines)
+        
+        if not is_valid:
+            error_msg = "\n".join(errors[:10])
+            if len(errors) > 10: error_msg += "\n..."
+            if not messagebox.askyesno("Validation FEC échouée", f"Le fichier contient des erreurs :\n{error_msg}\n\nVoulez-vous quand même l'enregistrer ?"):
+                return
+
+        # --- Enregistrement ---
+        filename = f"{siren}FEC{datetime.now().strftime('%Y%m%d')}.txt"
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".txt", initialfile=filename, title="Enregistrer le fichier FEC (Format Légal)", filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
+        )
+        if not filepath: return
+
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write("\n".join(lines))
             

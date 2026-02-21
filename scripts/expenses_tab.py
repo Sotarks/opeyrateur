@@ -33,7 +33,9 @@ def create_expenses_tab(app):
 
     # Catégorie
     ctk.CTkLabel(form_frame, text="Catégorie").grid(row=1, column=1, padx=5, pady=5)
-    categories = ["Loyer", "Déplacement", "Matériel", "Fournitures", "Cotisations", "Repas", "Autre"]
+    categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
+                  "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
+                  "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
     app.expense_cat = ctk.CTkOptionMenu(form_frame, values=categories)
     app.expense_cat.grid(row=2, column=1, padx=5, pady=(0, 10), sticky="ew")
 
@@ -121,6 +123,10 @@ def create_expenses_tab(app):
     ctk.CTkButton(button_container, text="Gérer les récurrents", command=lambda: _open_recurring_expenses_window(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button).pack(side="left", padx=(0, 5))
     ctk.CTkButton(button_container, text="Générer mensuels", command=lambda: _generate_monthly_expenses(app), fg_color="#E67E22", hover_color="#D35400", font=app.font_button).pack(side="left", padx=(0, 5))
     ctk.CTkButton(button_container, text="Ouvrir PDF", command=lambda: _view_pdf_report(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button).pack(side="left", padx=(0, 5))
+    
+    btn_import = ctk.CTkButton(button_container, text="Importer CSV Banque", command=lambda: _import_bank_csv(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button)
+    btn_import.pack(side="left", padx=(0, 5))
+    
     ctk.CTkButton(button_container, text="Télécharger PDF URSSAF", fg_color="#34D399", hover_color="#10B981", command=lambda: _generate_pdf_report(app), font=app.font_button).pack(side="left", padx=(0, 5))
     ctk.CTkButton(button_container, text="Export FEC (.fec)", command=lambda: _export_fec_expenses(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button).pack(side="left", padx=(0, 5))
     ctk.CTkButton(button_container, text="Ouvrir le dossier", command=_open_expenses_folder, font=app.font_button).pack(side="left", padx=(0, 5))
@@ -617,7 +623,9 @@ def _open_recurring_expenses_window(app):
     
     ctk.CTkLabel(add_frame, text="Ajouter un nouveau frais récurrent", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, columnspan=4, pady=5)
 
-    categories = ["Loyer", "Déplacement", "Matériel", "Fournitures", "Cotisations", "Repas", "Autre"]
+    categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
+                  "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
+                  "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
     cat_var = ctk.CTkOptionMenu(add_frame, values=categories)
     cat_var.grid(row=1, column=0, padx=5, pady=5)
     
@@ -732,6 +740,7 @@ def _generate_monthly_expenses(app):
 def _export_fec_expenses(app):
     """Génère un fichier FEC (Fichier des Écritures Comptables) pour les frais de l'année en cours."""
     import pandas as pd
+    from .data_manager import ACCOUNT_MAP
     
     # Utilise les données filtrées
     if not hasattr(app, 'current_expenses_filtered_df') or app.current_expenses_filtered_df.empty:
@@ -745,18 +754,6 @@ def _export_fec_expenses(app):
     siret = pdf_info.get('siret', '').replace(' ', '')
     siren = siret[:9] if len(siret) >= 9 else "000000000"
     
-    filename = f"{siren}FEC_Frais_{datetime.now().strftime('%Y%m%d')}.txt"
-    
-    filepath = filedialog.asksaveasfilename(
-        defaultextension=".txt",
-        initialfile=filename,
-        title="Enregistrer le fichier FEC Frais",
-        filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
-    )
-    
-    if not filepath:
-        return
-
     try:
         lines = []
         header = [
@@ -765,33 +762,91 @@ def _export_fec_expenses(app):
             "PieceRef", "PieceDate", "EcritureLib", "Debit", "Credit", 
             "EcritureLet", "DateLet", "ValidDate", "Montantdevise", "Idevise"
         ]
-        lines.append("\t".join(header))
+        lines.append("|".join(header))
         
         if 'Date' in df.columns:
             df['DateObj'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
             df = df.sort_values(by=['DateObj'])
 
-        account_map = {"Loyer": "613200", "Déplacement": "625100", "Matériel": "606300", "Fournitures": "606400", "Cotisations": "646000", "Repas": "625700", "Autre": "628000"}
-
+        ecriture_counter = 0
         for i, row in df.iterrows():
             try:
+                ecriture_counter += 1
                 date_str = row['Date']
                 date_obj = datetime.strptime(date_str, '%d/%m/%Y')
                 fec_date = date_obj.strftime("%Y%m%d")
                 ref_piece = str(row.get('ExpenseID', f"EXP{i+1}"))
                 if not ref_piece or ref_piece == "nan": ref_piece = f"EXP{i+1}"
+                ecriture_num = str(ecriture_counter)
+
+                # Fonction de nettoyage pour éviter de casser le CSV (pipe) ou de tronquer (newline)
+                def clean_txt(t):
+                    return str(t).replace('|', ' ').replace('\n', ' ').replace('\r', '').strip() if t else ""
                 
-                montant_float = float(row['Montant']) if pd.notnull(row['Montant']) else 0.0
+                raw_montant = row.get('Montant', 0.0)
+                if isinstance(raw_montant, str):
+                    raw_montant = raw_montant.replace(',', '.')
+                montant_float = float(raw_montant) if pd.notnull(raw_montant) else 0.0
+                
                 montant_str = f"{montant_float:.2f}".replace('.', ',')
                 zero_str = "0,00"
-                libelle = f"{row.get('Categorie', '')} - {row.get('Description', '')}"
-                compte_charge = account_map.get(row.get('Categorie'), "628000")
                 
-                lines.append("\t".join(["AC", "Achats", ref_piece, fec_date, compte_charge, row.get('Categorie', 'Charge'), "", "", ref_piece, fec_date, libelle, montant_str, zero_str, "", "", fec_date, "", ""]))
-                lines.append("\t".join(["AC", "Achats", ref_piece, fec_date, "401000", "Fournisseurs divers", "", "", ref_piece, fec_date, libelle, zero_str, montant_str, "", "", fec_date, "", ""]))
+                libelle = f"{clean_txt(row.get('Categorie', ''))} - {clean_txt(row.get('Description', ''))}"
+                # Limite la taille du libellé pour éviter les problèmes de buffer
+                libelle = libelle[:200]
+                
+                cat = clean_txt(row.get('Categorie', 'Charge'))
+                
+                # Utilise le CompteNum enregistré s'il existe, sinon utilise le mapping par défaut
+                compte_charge = str(row.get('CompteNum')) if pd.notna(row.get('CompteNum')) else ACCOUNT_MAP.get(cat, "628000")
+                if compte_charge.endswith('.0'): compte_charge = compte_charge[:-2]
+                
+                line_charge = "|".join(["AC", "Achats", ecriture_num, fec_date, compte_charge, cat, "", "", ref_piece, fec_date, libelle, montant_str, zero_str, "", "", fec_date, "", ""])
+                line_fournisseur = "|".join(["AC", "Achats", ecriture_num, fec_date, "401000", "Fournisseurs divers", "", "", ref_piece, fec_date, libelle, zero_str, montant_str, "", "", fec_date, "", ""])
+                
+                lines.append(line_charge)
+                lines.append(line_fournisseur)
             except Exception: continue
         
+        # --- Validation du fichier FEC ---
+        from .utils import validate_fec_content
+        is_valid, errors = validate_fec_content(lines)
+        
+        if not is_valid:
+            error_msg = "\n".join(errors[:10])
+            if len(errors) > 10: error_msg += "\n..."
+            if not messagebox.askyesno("Validation FEC échouée", f"Le fichier contient des erreurs :\n{error_msg}\n\nVoulez-vous quand même l'enregistrer ?"):
+                return
+
+        # --- Enregistrement ---
+        filename = f"{siren}FEC_Frais_{datetime.now().strftime('%Y%m%d')}.txt"
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".txt", initialfile=filename, title="Enregistrer le fichier FEC Frais", filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
+        )
+        if not filepath: return
+
         with open(filepath, 'w', encoding='utf-8') as f: f.write("\n".join(lines))
         messagebox.showinfo("Succès", f"Fichier FEC Frais généré :\n{filepath}")
     except Exception as e:
         messagebox.showerror("Erreur", f"Erreur FEC : {e}")
+
+def _import_bank_csv(app):
+    """Ouvre un dialogue pour importer un CSV bancaire."""
+    file_path = filedialog.askopenfilename(
+        title="Sélectionner le relevé bancaire (CSV)",
+        filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")]
+    )
+    
+    if not file_path:
+        return
+        
+    from .data_manager import import_expenses_from_csv
+    
+    count, error = import_expenses_from_csv(file_path)
+    
+    if error:
+        messagebox.showerror("Erreur d'import", f"Une erreur est survenue : {error}")
+    else:
+        messagebox.showinfo("Succès", f"{count} dépenses ont été importées et catégorisées.")
+        refresh_expenses_list(app)
+        app._update_dashboard_kpis()

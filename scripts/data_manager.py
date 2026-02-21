@@ -12,6 +12,28 @@ MONTHS_FR = [
     "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
 ]
 
+ACCOUNT_MAP = {
+    "Loyer": "613200",
+    "Électricité / Gaz": "606100",
+    "Ménage": "615000",
+    "Assurance Local": "616000",
+    "Doctolib / Logiciels": "628000",
+    "Téléphone / Internet": "626000",
+    "Site Web": "623000",
+    "Mouchoirs / Café": "606300",
+    "Papeterie / Tests": "606400",
+    "Repas (seule)": "625700",
+    "Supervision": "622800",
+    "Formation": "618100",
+    "Banque": "627800",
+    "Assurance RCP": "616000",
+    "Déplacement": "625100",
+    "Cotisations": "646000",
+    "Tenue Pro": "606300",
+    "Autre": "628000",
+    "Matériel": "606300", "Fournitures": "606400"
+}
+
 def _get_excel_path(year):
     """Retourne le chemin du fichier Excel pour une année donnée."""
     year_dir = os.path.join(config.FACTURES_DIR, str(year))
@@ -70,7 +92,10 @@ def save_to_excel(data):
         all_sheets = {m: pd.DataFrame() for m in MONTHS_FR}
 
     sheet_df = all_sheets.get(month_name, pd.DataFrame())
-    updated_sheet_df = pd.concat([sheet_df, new_data_df], ignore_index=True)
+    if sheet_df.empty:
+        updated_sheet_df = new_data_df
+    else:
+        updated_sheet_df = pd.concat([sheet_df, new_data_df], ignore_index=True)
     all_sheets[month_name] = updated_sheet_df
 
     # Crée une liste maîtresse de toutes les colonnes pour éviter la perte de données
@@ -238,6 +263,7 @@ def save_expense(data):
 
         date_obj = datetime.strptime(data['Date'], '%d/%m/%Y')
         year = date_obj.year
+        month_name = MONTHS_FR[date_obj.month - 1]
         excel_path = _get_expenses_excel_path(year)
         
         # Gestion du justificatif
@@ -272,12 +298,24 @@ def save_expense(data):
         # Mise à jour des données avec le chemin final
         data['ProofPath'] = final_proof_path
         
+        # Ajout du CompteNum si absent
+        if 'CompteNum' not in data:
+            data['CompteNum'] = ACCOUNT_MAP.get(data.get('Categorie'), "628000")
+        
         # Colonnes attendues
-        columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath"]
+        columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath", "CompteNum"]
         
         os.makedirs(os.path.dirname(excel_path), exist_ok=True)
+        
+        all_sheets = {}
         if os.path.exists(excel_path):
-            df = pd.read_excel(excel_path)
+            try:
+                all_sheets = pd.read_excel(excel_path, sheet_name=None)
+            except Exception:
+                all_sheets = {}
+        
+        if month_name in all_sheets:
+            df = all_sheets[month_name]
         else:
             df = pd.DataFrame(columns=columns)
             
@@ -288,9 +326,16 @@ def save_expense(data):
             if col not in df.columns:
                 df[col] = None
         
-        df = pd.concat([df, new_row], ignore_index=True)
+        if df.empty:
+            df = new_row
+        else:
+            df = pd.concat([df, new_row], ignore_index=True)
+        all_sheets[month_name] = df
         
-        df.to_excel(excel_path, index=False)
+        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+            for sheet_name, sheet_df in all_sheets.items():
+                sheet_df.to_excel(writer, sheet_name=sheet_name, index=False)
+                
         return True
     except Exception as e:
         print(f"Erreur sauvegarde frais: {e}")
@@ -300,17 +345,33 @@ def load_expenses(year):
     """Charge les frais pour une année donnée."""
     import pandas as pd
     excel_path = _get_expenses_excel_path(year)
-    columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath"]
+    columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath", "CompteNum"]
     if not os.path.exists(excel_path):
         return pd.DataFrame(columns=columns)
     
-    df = pd.read_excel(excel_path)
+    try:
+        all_sheets = pd.read_excel(excel_path, sheet_name=None)
+        df_list = []
+        for df in all_sheets.values():
+            if not df.empty:
+                df_list.append(df)
+        
+        if df_list:
+            df = pd.concat(df_list, ignore_index=True)
+        else:
+            df = pd.DataFrame(columns=columns)
+    except Exception:
+        return pd.DataFrame(columns=columns)
+
     # S'assure que la colonne ProofPath existe (pour les anciens fichiers)
     if "ProofPath" not in df.columns:
         df["ProofPath"] = None
     # S'assure que la colonne ExpenseID existe (pour les anciens fichiers)
     if "ExpenseID" not in df.columns:
         df["ExpenseID"] = None
+    # S'assure que la colonne CompteNum existe
+    if "CompteNum" not in df.columns:
+        df["CompteNum"] = df["Categorie"].map(ACCOUNT_MAP).fillna("628000")
     return df
 
 def delete_expense(data):
@@ -324,42 +385,153 @@ def delete_expense(data):
         if not os.path.exists(excel_path):
             return False
             
-        df = pd.read_excel(excel_path, dtype={'ExpenseID': str})
-        
-        # Recherche de la ligne à supprimer
-        idx_to_drop = None
+        all_sheets = pd.read_excel(excel_path, sheet_name=None, dtype={'ExpenseID': str})
+        deleted = False
 
-        # Nouvelle méthode : suppression par ID unique (plus fiable)
-        if 'ExpenseID' in data and data['ExpenseID'] and 'ExpenseID' in df.columns:
-            matches = df.index[df['ExpenseID'] == data['ExpenseID']].tolist()
-            if matches:
-                idx_to_drop = matches[0]
-        
-        # Ancienne méthode (fallback pour les données sans ID)
-        if idx_to_drop is None:
-            for idx, row in df.iterrows():
-                row_date = str(row['Date'])
-                row_cat = str(row['Categorie'])
-                row_desc = str(row['Description'])
-                row_amount = float(row.get('Montant', 0.0))
-                
-                if (row_date == data['Date'] and row_cat == data['Categorie'] and row_desc == data['Description'] and abs(row_amount - data['Montant']) < 0.01):
-                    idx_to_drop = idx
-                    break
-        
-        if idx_to_drop is not None:
-            # Suppression du fichier de preuve associé s'il existe
-            proof_path = df.loc[idx_to_drop, 'ProofPath'] if 'ProofPath' in df.columns else None
-            if proof_path and pd.notna(proof_path) and os.path.exists(str(proof_path)):
-                try:
-                    os.remove(str(proof_path))
-                except Exception as e:
-                    print(f"Erreur suppression fichier preuve: {e}")
+        def remove_from_df(df):
+            idx_to_drop = None
+            if 'ExpenseID' in data and data['ExpenseID'] and 'ExpenseID' in df.columns:
+                matches = df.index[df['ExpenseID'] == data['ExpenseID']].tolist()
+                if matches:
+                    idx_to_drop = matches[0]
+            
+            if idx_to_drop is None:
+                for idx, row in df.iterrows():
+                    try:
+                        row_amount = float(row.get('Montant', 0.0))
+                        data_amount = float(data.get('Montant', 0.0))
+                    except:
+                        row_amount, data_amount = 0.0, 0.0
+                    
+                    if (str(row['Date']) == data['Date'] and 
+                        str(row['Categorie']) == data['Categorie'] and 
+                        str(row['Description']) == data['Description'] and 
+                        abs(row_amount - data_amount) < 0.01):
+                        idx_to_drop = idx
+                        break
+            
+            if idx_to_drop is not None:
+                proof_path = df.loc[idx_to_drop, 'ProofPath'] if 'ProofPath' in df.columns else None
+                if proof_path and pd.notna(proof_path) and os.path.exists(str(proof_path)):
+                    try: os.remove(str(proof_path))
+                    except Exception: pass
+                return df.drop(idx_to_drop).reset_index(drop=True), True
+            return df, False
 
-            df = df.drop(idx_to_drop).reset_index(drop=True)
-            df.to_excel(excel_path, index=False)
+        # 1. Chercher dans l'onglet du mois
+        month_name = MONTHS_FR[date_obj.month - 1]
+        if month_name in all_sheets:
+            all_sheets[month_name], deleted = remove_from_df(all_sheets[month_name])
+
+        # 2. Si pas trouvé, chercher partout (migration)
+        if not deleted:
+            for name in all_sheets:
+                if name == month_name: continue
+                all_sheets[name], deleted = remove_from_df(all_sheets[name])
+                if deleted: break
+
+        if deleted:
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                for name, sheet_df in all_sheets.items():
+                    sheet_df.to_excel(writer, sheet_name=name, index=False)
             return True
+            
         return False
     except Exception as e:
         print(f"Erreur suppression frais: {e}")
         return False
+
+def _guess_category(description):
+    """Devine la catégorie d'une dépense en fonction de sa description."""
+    desc = description.upper()
+    
+    keywords = {
+        "Loyer": ["LOYER", "SCI", "IMMOBILIER", "FONCIA"],
+        "Électricité / Gaz": ["EDF", "ENGIE", "TOTAL ENERGIES", "EAU", "VEOLIA"],
+        "Ménage": ["MENAGE", "NETTOYAGE", "SHIVA", "O2"],
+        "Assurance Local": ["ASSURANCE LOCAL", "MULTIRISQUE"],
+        "Doctolib / Logiciels": ["DOCTOLIB", "GOOGLE", "MICROSOFT", "ADOBE", "ZOOM", "LOGICIEL"],
+        "Téléphone / Internet": ["ORANGE", "SFR", "BOUYGUES", "FREE", "TELEPHONE", "INTERNET", "SOSH", "RED"],
+        "Site Web": ["WORDPRESS", "OVH", "IONOS", "HOSTINGER", "GANDI", "SITE"],
+        "Mouchoirs / Café": ["ACTION", "HEMA", "CAFE", "NESPRESSO", "MOUCHOIR", "ENTRETIEN", "IKEA"],
+        "Papeterie / Tests": ["BUREAU", "OFFICE", "DEPOT", "CARTOUCHE", "PAPIER", "ECPA", "PEARSON", "TEST", "WISC", "WAIS"],
+        "Repas (seule)": ["RESTAURANT", "BOULANGERIE", "MC DO", "BURGER", "SUSHI", "EAT", "DELIVEROO", "UBER EATS", "CARREFOUR", "LECLERC", "AUCHAN", "INTERMARCHE", "MONOPRIX"],
+        "Supervision": ["SUPERVISION"],
+        "Formation": ["FORMATION", "DPC", "FIFPL"],
+        "Banque": ["BANQUE", "FRAIS", "COMMISSION", "AGIOS", "CB"],
+        "Assurance RCP": ["MAAF", "AXA", "ALLIANZ", "MACIF", "MATMUT", "RCP", "ASSURANCE"],
+        "Tenue Pro": ["BLOUSE", "VETEMENT", "CHAUSSURE", "TENUE", "UNIFORME", "TEXTILE"],
+        "Déplacement": ["SNCF", "UBER", "TAXI", "TOTAL", "ESSO", "BP", "SHELL", "PEAGE", "PARKING", "STATION", "AIR FRANCE", "EASYJET"],
+        "Cotisations": ["URSSAF", "CIPAV", "RETRAITE", "RAM", "CPAM", "IMPOTS", "SIE", "CFE"],
+        "Autre": []
+    }
+
+    for cat, words in keywords.items():
+        if any(word in desc for word in words):
+            return cat
+    
+    return "Autre"
+
+def import_expenses_from_csv(file_path):
+    """Importe des dépenses depuis un fichier CSV bancaire."""
+    import pandas as pd
+    try:
+        # Tentative de lecture avec détection automatique du séparateur
+        try:
+            df = pd.read_csv(file_path, sep=None, engine='python', encoding='utf-8')
+        except:
+            df = pd.read_csv(file_path, sep=None, engine='python', encoding='latin-1')
+
+        # Normalisation des noms de colonnes (minuscules, sans accents)
+        df.columns = df.columns.str.lower().str.replace('é', 'e').str.replace('è', 'e').str.strip()
+
+        # Identification des colonnes clés
+        col_date = next((c for c in df.columns if 'date' in c), None)
+        col_desc = next((c for c in df.columns if any(x in c for x in ['libelle', 'description', 'label', 'operation'])), None)
+        col_amount = next((c for c in df.columns if any(x in c for x in ['montant', 'amount', 'debit', 'credit', 'solde'])), None)
+
+        if not (col_date and col_desc and col_amount):
+            return 0, "Colonnes Date, Libellé ou Montant introuvables."
+
+        count = 0
+        for _, row in df.iterrows():
+            try:
+                # Gestion du montant (virgule vs point, signe)
+                montant_raw = row[col_amount]
+                if isinstance(montant_raw, str):
+                    montant_raw = montant_raw.replace(',', '.').replace(' ', '').replace('€', '')
+                montant = float(montant_raw)
+
+                # On ne garde que les dépenses (montants négatifs)
+                if montant >= 0:
+                    continue
+                
+                # On passe en positif pour l'enregistrement
+                montant = abs(montant)
+
+                # Formatage de la date
+                date_raw = pd.to_datetime(row[col_date], dayfirst=True, errors='coerce')
+                if pd.isna(date_raw): continue
+                date_str = date_raw.strftime("%d/%m/%Y")
+
+                description = str(row[col_desc]).strip()
+                categorie = _guess_category(description)
+                compte_num = ACCOUNT_MAP.get(categorie, "628000")
+
+                data = {
+                    "Date": date_str,
+                    "Categorie": categorie,
+                    "Description": description,
+                    "Montant": montant,
+                    "ProofPath": None,
+                    "CompteNum": compte_num
+                }
+                
+                if save_expense(data):
+                    count += 1
+            except Exception:
+                continue
+                
+        return count, ""
+    except Exception as e:
+        return 0, str(e)

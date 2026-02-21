@@ -21,8 +21,10 @@ class ToolTip:
         self.widget = widget
         self.text = text
         self.tooltip_window = None
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
+        # Utilisation de add="+" pour ne pas écraser les événements existants (ex: hover effects)
+        self.widget.bind("<Enter>", self.show_tooltip, add="+")
+        self.widget.bind("<Leave>", self.hide_tooltip, add="+")
+        self.widget.bind("<ButtonPress>", self.hide_tooltip, add="+")
 
     def show_tooltip(self, event=None):
         if self.tooltip_window: return
@@ -38,3 +40,35 @@ class ToolTip:
         if self.tooltip_window:
             self.tooltip_window.destroy()
             self.tooltip_window = None
+
+def validate_fec_content(lines):
+    """Vérifie la conformité des lignes FEC (18 colonnes, dates, équilibre)."""
+    errors = []
+    if not lines:
+        return False, ["Le fichier est vide."]
+
+    header = lines[0].split('|')
+    if len(header) != 18:
+        errors.append(f"En-tête invalide : {len(header)} colonnes (attendu : 18).")
+
+    ecritures = {} # EcritureNum -> balance
+
+    for i, line in enumerate(lines[1:], start=2):
+        cols = line.split('|')
+        if len(cols) != 18:
+            errors.append(f"Ligne {i} : {len(cols)} colonnes (attendu : 18).")
+            continue
+        
+        # Vérification Date (YYYYMMDD)
+        date_ecr = cols[3]
+        if len(date_ecr) != 8 or not date_ecr.isdigit():
+            errors.append(f"Ligne {i} : Date incorrecte '{date_ecr}' (attendu YYYYMMDD).")
+            
+        # Vérification Montants (Virgule obligatoire pour FEC France)
+        debit, credit = cols[11], cols[12]
+        if '.' in debit or '.' in credit:
+            errors.append(f"Ligne {i} : Montant invalide (point détecté). Utilisez une virgule (ex: 12,50).")
+
+    if errors:
+        return False, errors
+    return True, []

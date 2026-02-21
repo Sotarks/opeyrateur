@@ -41,7 +41,7 @@ DEFAULT_SETTINGS = {
             {"Categorie": "Autre", "Description": "Téléphone", "Montant": 1.99, "ProofPath": ""},
             {"Categorie": "Déplacement", "Description": "Essence", "Montant": 120.0, "ProofPath": ""},
             {"Categorie": "Cotisations", "Description": "Mutuelle", "Montant": 5.0, "ProofPath": ""},
-            {"Categorie": "Repas", "Description": "Nourriture", "Montant": 80.0, "ProofPath": ""}
+            {"Categorie": "Repas (seule)", "Description": "Nourriture", "Montant": 80.0, "ProofPath": ""}
         ])
     }
 }

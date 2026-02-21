@@ -374,7 +374,7 @@ class App(ctk.CTk):
             create_budget_tab(self)
             self.is_budget_tab_initialized = True
         elif wrapper == self.expenses_wrapper and not self.is_expenses_tab_initialized:
-            from .expenses_tab import create_expenses_tab, refresh_expenses_list
+            from .expenses_tab import create_expenses_tab
             create_expenses_tab(self)
             self.is_expenses_tab_initialized = True
         elif wrapper == self.attestation_wrapper and not self.is_attestation_tab_initialized:
@@ -385,6 +385,7 @@ class App(ctk.CTk):
         wrapper.grid(row=0, column=0, sticky="nsew")
         
         if wrapper == self.expenses_wrapper:
+            from .expenses_tab import refresh_expenses_list
             refresh_expenses_list(self)
         elif wrapper == self.search_wrapper:
             import pandas as pd
