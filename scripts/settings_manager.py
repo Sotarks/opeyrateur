@@ -43,6 +43,10 @@ DEFAULT_SETTINGS = {
             {"Categorie": "Cotisations", "Description": "Mutuelle", "Montant": 5.0, "ProofPath": ""},
             {"Categorie": "Repas (seule)", "Description": "Nourriture", "Montant": 80.0, "ProofPath": ""}
         ])
+    },
+    'App': {
+        'window_geometry': '1280x800',
+        'ui_zoom': '1.0'
     }
 }
 
@@ -132,6 +136,41 @@ def save_recurring_expenses(data):
     if not parser.has_section('Expenses'):
         parser.add_section('Expenses')
     parser.set('Expenses', 'recurring', json.dumps(data))
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+        parser.write(configfile)
+    _invalidate_caches()
+
+def get_window_geometry():
+    """Récupère la géométrie de la fenêtre sauvegardée."""
+    setup_default_settings()
+    parser = _get_parser()
+    return parser.get('App', 'window_geometry', fallback='1280x800')
+
+def save_window_geometry(geometry):
+    """Sauvegarde la géométrie de la fenêtre."""
+    parser = _get_parser()
+    if not parser.has_section('App'):
+        parser.add_section('App')
+    parser.set('App', 'window_geometry', geometry)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+        parser.write(configfile)
+    _invalidate_caches()
+
+def get_ui_zoom():
+    """Récupère le niveau de zoom de l'interface."""
+    setup_default_settings()
+    parser = _get_parser()
+    try:
+        return float(parser.get('App', 'ui_zoom', fallback='1.0'))
+    except ValueError:
+        return 1.0
+
+def save_ui_zoom(zoom):
+    """Sauvegarde le niveau de zoom de l'interface."""
+    parser = _get_parser()
+    if not parser.has_section('App'):
+        parser.add_section('App')
+    parser.set('App', 'ui_zoom', str(zoom))
     with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
         parser.write(configfile)
     _invalidate_caches()

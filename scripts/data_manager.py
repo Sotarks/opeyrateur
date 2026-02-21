@@ -52,6 +52,77 @@ def get_yearly_invoice_count(year):
     except Exception:
         return 0
 
+def get_next_sequence_id(year):
+    """Calcule le prochain numéro de séquence disponible pour l'année donnée (comble les trous)."""
+    import pandas as pd
+    excel_path = _get_excel_path(year)
+    
+    if not os.path.exists(excel_path):
+        return 1
+    
+    existing_seqs = set()
+    try:
+        all_sheets = pd.read_excel(excel_path, sheet_name=None)
+        for df in all_sheets.values():
+            if 'SequenceID' in df.columns:
+                # On convertit en numérique et on ignore les erreurs/vides
+                seqs = pd.to_numeric(df['SequenceID'], errors='coerce').dropna().astype(int)
+                existing_seqs.update(seqs.tolist())
+        
+        # On cherche le premier entier positif (partir de 1) qui n'est pas dans l'ensemble
+        seq = 1
+        while seq in existing_seqs:
+            seq += 1
+        return seq
+
+    except Exception as e:
+        print(f"Erreur calcul sequence: {e}")
+        # Fallback : max + 1 si on n'arrive pas à lire correctement
+        return get_yearly_invoice_count(year) + 1
+
+def check_duplicate_invoice(data):
+    """Vérifie si une facture identique (Date, Nom, Prénom, Montant) existe déjà."""
+    import pandas as pd
+    try:
+        invoice_date = datetime.strptime(data['Date'], '%d/%m/%Y')
+        year = invoice_date.year
+        excel_path = _get_excel_path(year)
+        
+        if not os.path.exists(excel_path):
+            return False
+            
+        all_sheets = pd.read_excel(excel_path, sheet_name=None)
+        
+        target_nom = str(data.get('Nom', '')).strip().upper()
+        target_prenom = str(data.get('Prenom', '')).strip().lower()
+        target_montant = float(data.get('Montant', 0.0))
+        target_date = data.get('Date')
+
+        for df in all_sheets.values():
+            if df.empty: continue
+            
+            # Vérification des colonnes nécessaires
+            if not {'Date', 'Nom', 'Prenom', 'Montant'}.issubset(df.columns):
+                continue
+            
+            # Recherche de correspondance
+            # On compare les chaînes en minuscule/majuscule pour être sûr
+            # On utilise une tolérance pour le montant (float)
+            match = df[
+                (df['Date'] == target_date) &
+                (df['Nom'].astype(str).str.strip().str.upper() == target_nom) &
+                (df['Prenom'].astype(str).str.strip().str.lower() == target_prenom) &
+                (abs(pd.to_numeric(df['Montant'], errors='coerce') - target_montant) < 0.01)
+            ]
+            
+            if not match.empty:
+                return True
+                
+    except Exception as e:
+        print(f"Erreur check doublon: {e}")
+        return False
+    return False
+
 def backup_database(year):
     """Crée une copie de sauvegarde du fichier Excel de l'année donnée."""
     source = _get_excel_path(year)

@@ -139,6 +139,7 @@ class App(ctk.CTk):
 
         # --- Raccourcis Clavier contextuels ---
         self.bind("<Control-f>", self._focus_search)
+        self.bind("<F11>", self.toggle_fullscreen)
         # Le bind sur le wrapper assure que le raccourci n'est actif que sur cet écran
         self.new_invoice_wrapper.bind("<Control-Return>", lambda event: self.invoice_manager.valider())
         self.new_invoice_wrapper.bind("<Return>", lambda event: self.invoice_manager.valider())
@@ -167,8 +168,18 @@ class App(ctk.CTk):
         self.grid_rowconfigure(1, weight=0) # Ligne pour la barre de statut
         self.grid_columnconfigure(0, weight=1)
 
-        self.geometry("1920x1080")
-        self.resizable(False, False)
+        # Gestion de l'affichage (DPI & Taille)
+        zoom = settings_manager.get_ui_zoom()
+        ctk.set_widget_scaling(zoom)
+        ctk.set_window_scaling(zoom)
+        
+        geometry = settings_manager.get_window_geometry()
+        self.geometry(geometry)
+        self.resizable(True, True)
+        # Si c'est la taille par défaut, on maximise, sinon on respecte la taille sauvegardée
+        if geometry == '1280x800':
+            self.after(0, lambda: self.state('zoomed'))
+            
         self.withdraw()
         
         # Animation de fondu (Fade-in)
@@ -179,6 +190,14 @@ class App(ctk.CTk):
         self.login_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.login_frame.grid(row=0, column=0, sticky="nsew")
         self.login_ui.create_login_screen()
+        
+        # Sauvegarde de la position à la fermeture
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self):
+        """Sauvegarde la géométrie et ferme l'application."""
+        settings_manager.save_window_geometry(self.geometry())
+        self.destroy()
 
     def _open_settings_window(self):
         self.settings_ui.open_settings_window()
@@ -215,7 +234,9 @@ class App(ctk.CTk):
         for widget in self.results_frame.winfo_children():
             widget.destroy()
         
-        self.results_frame.configure(label_text=label)
+        # Ajout du nombre de résultats dans le titre
+        count = len(dataframe) if dataframe is not None else 0
+        self.results_frame.configure(label_text=f"{label} ({count})")
 
         if dataframe is None or dataframe.empty:
             # Affiche un message différent si la recherche n'a pas encore été lancée
@@ -245,7 +266,7 @@ class App(ctk.CTk):
         for _, row in page_data.iterrows():
             # --- Design Compact (Liste) ---
             invoice_frame = ctk.CTkFrame(self.results_frame, corner_radius=8, fg_color=("white", "gray20"), border_width=1, border_color=("gray90", "gray30"))
-            invoice_frame.pack(fill="x", pady=(0, 2), padx=3)
+            invoice_frame.pack(fill="x", pady=(0, 2), padx=5)
             
             invoice_frame.grid_columnconfigure(2, weight=1) # La colonne détails s'étend pour pousser le reste à droite
             
@@ -266,20 +287,20 @@ class App(ctk.CTk):
 
             # 2. Nom Patient
             name_label = ctk.CTkLabel(invoice_frame, text=patient_name, font=ctk.CTkFont(family="Montserrat", size=13, weight="bold"), anchor="w")
-            name_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=8)
+            name_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=2)
             
             # 3. Détails (Date - Prestation)
             details_text = f"{row['Date']}  |  {row.get('Prestation', 'Consultation')}"
             details_label = ctk.CTkLabel(invoice_frame, text=details_text, font=ctk.CTkFont(family="Montserrat", size=12), text_color="gray", anchor="w")
-            details_label.grid(row=0, column=2, sticky="w", pady=8)
+            details_label.grid(row=0, column=2, sticky="w", pady=2)
             
             # 4. Statut
             status_label = ctk.CTkLabel(invoice_frame, text=payment_status.upper(), font=ctk.CTkFont(family="Montserrat", size=10, weight="bold"), text_color=status_color, anchor="e")
-            status_label.grid(row=0, column=3, sticky="e", padx=15, pady=8)
+            status_label.grid(row=0, column=3, sticky="e", padx=15, pady=2)
 
             # 5. Montant
             amount_label = ctk.CTkLabel(invoice_frame, text=f"{row['Montant']:.2f} €", font=ctk.CTkFont(family="Montserrat", size=13, weight="bold"), text_color="#3498db", anchor="e")
-            amount_label.grid(row=0, column=4, sticky="e", padx=(0, 10), pady=8)
+            amount_label.grid(row=0, column=4, sticky="e", padx=(0, 10), pady=2)
 
             # --- Effet de survol (Highlight) ---
             row_data = row.to_dict()
@@ -579,7 +600,7 @@ class App(ctk.CTk):
             if self._calendar_toplevel:
                 self._calendar_toplevel.destroy()
                 self._calendar_toplevel = None
-            self.focus()
+            entry_widget.focus()
             
         def set_today():
             cal.selection_set(datetime.now())
@@ -610,19 +631,79 @@ class App(ctk.CTk):
                 widget = widget.master
             on_close()
 
-        self._calendar_toplevel = ctk.CTkToplevel(self)
+        # Détermine la fenêtre parente (pour gérer les modales correctement)
+        try:
+            parent = entry_widget.winfo_toplevel()
+        except Exception:
+            parent = self
+
+        self._calendar_toplevel = ctk.CTkToplevel(parent)
         self._calendar_toplevel.title("Choisir une date")
-        self._calendar_toplevel.transient(self)
-        # self._calendar_toplevel.grab_set() # Désactivé pour permettre le clic en dehors
+        self._calendar_toplevel.transient(parent)
+        
+        # Si la fenêtre parente n'est pas l'application principale (ex: fenêtre modale),
+        # on doit forcer le grab_set pour garder le focus et éviter la fermeture immédiate.
+        if parent != self:
+            self._calendar_toplevel.grab_set()
+            
         self._calendar_toplevel.protocol("WM_DELETE_WINDOW", on_close)
         self._calendar_toplevel.bind("<FocusOut>", on_focus_out)
+
+        # --- Navigation Rapide (Année & Mois) ---
+        nav_frame = ctk.CTkFrame(self._calendar_toplevel, fg_color="transparent")
+        nav_frame.pack(pady=(10, 0), padx=10, fill="x")
+        
+        # Import pour les mois
+        from .data_manager import MONTHS_FR
+        
+        ctk.CTkLabel(nav_frame, text="Année :", font=("Montserrat", 12)).pack(side="left", padx=(10, 5))
+        
+        year_entry = ctk.CTkEntry(nav_frame, width=60, height=25)
+        year_entry.pack(side="left", padx=5)
+        
+        def update_calendar_year(event=None):
+            try:
+                new_year = int(year_entry.get())
+                try:
+                    sel_date = datetime.strptime(cal.get_date(), '%d/%m/%Y')
+                    try: new_date = sel_date.replace(year=new_year)
+                    except ValueError: new_date = sel_date.replace(day=28, year=new_year)
+                except: new_date = datetime(new_year, 1, 1)
+                cal.selection_set(new_date)
+                cal.see(new_date)
+            except ValueError: pass
+
+        year_entry.bind("<Return>", update_calendar_year)
+        ctk.CTkButton(nav_frame, text="OK", width=40, height=25, command=update_calendar_year).pack(side="left", padx=5)
+
+        # Sélection du Mois
+        ctk.CTkLabel(nav_frame, text="Mois :", font=("Montserrat", 12)).pack(side="left", padx=(10, 5))
+        
+        def update_calendar_month(choice):
+            try:
+                month_idx = MONTHS_FR.index(choice) + 1
+                sel_date = datetime.strptime(cal.get_date(), '%d/%m/%Y')
+                import calendar
+                last_day = calendar.monthrange(sel_date.year, month_idx)[1]
+                new_day = min(sel_date.day, last_day)
+                new_date = sel_date.replace(month=month_idx, day=new_day)
+                cal.selection_set(new_date)
+                cal.see(new_date)
+            except Exception: pass
+
+        month_menu = ctk.CTkOptionMenu(nav_frame, values=MONTHS_FR, width=110, height=25, command=update_calendar_month)
+        month_menu.pack(side="left", padx=5)
 
         try:
             current_date = datetime.strptime(entry_widget.get(), '%d/%m/%Y')
             cal = Calendar(self._calendar_toplevel, selectmode='day', locale='fr_FR', date_pattern='dd/mm/yyyy',
                            year=current_date.year, month=current_date.month, day=current_date.day)
+            year_entry.insert(0, str(current_date.year))
+            month_menu.set(MONTHS_FR[current_date.month - 1])
         except (ValueError, TypeError):
             cal = Calendar(self._calendar_toplevel, selectmode='day', locale='fr_FR', date_pattern='dd/mm/yyyy')
+            year_entry.insert(0, str(datetime.now().year))
+            month_menu.set(MONTHS_FR[datetime.now().month - 1])
 
         cal.pack(pady=10, padx=10)
 
@@ -632,8 +713,8 @@ class App(ctk.CTk):
         ctk.CTkButton(btn_frame, text="Aujourd'hui", command=set_today, fg_color="#3498db", width=100).pack(side="left", padx=5, expand=True)
         ctk.CTkButton(btn_frame, text="Valider", command=set_date_and_close, width=100).pack(side="left", padx=5, expand=True)
 
-        self._calendar_toplevel.after(50, lambda: self._calendar_toplevel.geometry(f"+{self.winfo_x() + (self.winfo_width() - self._calendar_toplevel.winfo_width()) // 2}"
-                                                                                   f"+{self.winfo_y() + (self.winfo_height() - self._calendar_toplevel.winfo_height()) // 2}"))
+        self._calendar_toplevel.after(50, lambda: self._calendar_toplevel.geometry(f"+{parent.winfo_x() + (parent.winfo_width() - self._calendar_toplevel.winfo_width()) // 2}"
+                                                                                   f"+{parent.winfo_y() + (parent.winfo_height() - self._calendar_toplevel.winfo_height()) // 2}"))
         self._calendar_toplevel.after(100, lambda: self._calendar_toplevel.focus_set())
 
     def _generate_attestation_pdf(self):
@@ -723,6 +804,10 @@ class App(ctk.CTk):
             self.after(15, lambda: self._animate_fade_in(alpha))
         else:
             self.attributes("-alpha", 1.0)
+
+    def toggle_fullscreen(self, event=None):
+        """Bascule le mode plein écran."""
+        self.attributes("-fullscreen", not self.attributes("-fullscreen"))
 
 if __name__ == "__main__":
     app = App()

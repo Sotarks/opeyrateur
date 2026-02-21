@@ -32,14 +32,39 @@ class SettingsUI:
         settings_window.grid_rowconfigure(0, weight=1)
 
         # =================================================================================
-        # 1. SIDEBAR (GAUCHE)
+        # 1. SIDEBAR DE NAVIGATION (GAUCHE)
         # =================================================================================
         sidebar = ctk.CTkFrame(settings_window, corner_radius=0, fg_color=("gray90", "gray16"))
         sidebar.grid(row=0, column=0, sticky="nsew")
-        sidebar.grid_rowconfigure(1, weight=1) # Spacer
+        sidebar.grid_rowconfigure(6, weight=1) # Spacer
 
-        ctk.CTkLabel(sidebar, text="Paramètres", font=ctk.CTkFont(family="Montserrat", size=24, weight="bold")).pack(pady=(30, 10), padx=20, anchor="w")
-        ctk.CTkLabel(sidebar, text="Configuration & Maintenance", font=ctk.CTkFont(family="Montserrat", size=12), text_color="gray").pack(padx=20, anchor="w")
+        ctk.CTkLabel(sidebar, text="Paramètres", font=ctk.CTkFont(family="Montserrat", size=24, weight="bold")).pack(pady=(30, 20), padx=20, anchor="w")
+        
+        self.nav_buttons = {}
+        
+        def select_category(category_name):
+            # Met à jour l'apparence des boutons
+            for name, btn in self.nav_buttons.items():
+                if name == category_name:
+                    btn.configure(fg_color=("gray75", "gray25"))
+                else:
+                    btn.configure(fg_color="transparent")
+            
+            # Affiche le contenu correspondant
+            self._show_settings_content(category_name, content_area, settings_window)
+
+        categories = [
+            ("Personnalisation", "🎨"),
+            ("Gestion des Données", "💾"),
+            ("Maintenance", "🛠️"),
+            ("Debug / Tests", "🐞"),
+            ("Zone de Danger", "☢️")
+        ]
+
+        for name, icon in categories:
+            btn = ctk.CTkButton(sidebar, text=f"{icon}  {name}", anchor="w", fg_color="transparent", text_color=("gray10", "gray90"), hover_color=("gray80", "gray25"), height=45, font=self.app.font_button, command=lambda n=name: select_category(n))
+            btn.pack(fill="x", padx=10, pady=2)
+            self.nav_buttons[name] = btn
 
         # Bouton Fermer en bas
         ctk.CTkButton(sidebar, text="Fermer", command=settings_window.destroy, fg_color="transparent", border_width=1, text_color=("gray10", "gray90"), font=self.app.font_button, height=40).pack(side="bottom", fill="x", padx=20, pady=20)
@@ -47,70 +72,102 @@ class SettingsUI:
         # =================================================================================
         # 2. CONTENU PRINCIPAL (DROITE)
         # =================================================================================
-        content_frame = ctk.CTkScrollableFrame(settings_window, corner_radius=0, fg_color="transparent")
-        content_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        content_area = ctk.CTkFrame(settings_window, corner_radius=0, fg_color="transparent")
+        content_area.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        content_area.grid_columnconfigure(0, weight=1)
+        content_area.grid_rowconfigure(0, weight=1)
         
-        def create_section_card(parent, title, icon="⚙️", color="#3498db"):
-            card = ctk.CTkFrame(parent, corner_radius=15, fg_color=("white", "gray20"))
-            card.pack(fill="x", pady=(0, 20))
-            
-            header = ctk.CTkFrame(card, fg_color="transparent")
-            header.pack(fill="x", padx=20, pady=(15, 10))
-            
-            ctk.CTkLabel(header, text=icon, font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
-            ctk.CTkLabel(header, text=title, font=ctk.CTkFont(family="Montserrat", size=18, weight="bold"), text_color=color).pack(side="left")
-            
-            body = ctk.CTkFrame(card, fg_color="transparent")
-            body.pack(fill="x", padx=20, pady=(0, 20))
-            return body
+        # Affiche la première catégorie par défaut
+        select_category("Personnalisation")
 
-        # 1. Personnalisation
-        perso_body = create_section_card(content_frame, "Personnalisation", "🎨", "#3498db")
-        ctk.CTkButton(perso_body, text="Modifier les informations des PDF", font=self.app.font_button, command=self._open_pdf_settings_window, height=40).pack(fill="x", pady=5)
-        ctk.CTkButton(perso_body, text="Changer le code PIN", font=self.app.font_button, command=self._open_change_pin_window, height=40).pack(fill="x", pady=5)
+    def _show_settings_content(self, category, parent, window):
+        # Vide le contenu précédent
+        for widget in parent.winfo_children():
+            widget.destroy()
+            
+        # Crée un cadre défilant pour le contenu
+        scroll_frame = ctk.CTkScrollableFrame(parent, corner_radius=15, fg_color=("white", "gray20"))
+        scroll_frame.grid(row=0, column=0, sticky="nsew")
+        scroll_frame.grid_columnconfigure(0, weight=1)
 
-        # 2. Données
-        data_body = create_section_card(content_frame, "Gestion des Données", "💾", "#9b59b6")
-        ctk.CTkButton(data_body, text="Ouvrir le dossier de l'application", font=self.app.font_button, command=self._open_app_directory, height=40).pack(fill="x", pady=5)
+        # Titre de la section
+        ctk.CTkLabel(scroll_frame, text=category, font=ctk.CTkFont(family="Montserrat", size=24, weight="bold"), text_color="#3498db").pack(anchor="w", padx=20, pady=(20, 10))
 
-        # 3. Maintenance
-        maint_body = create_section_card(content_frame, "Maintenance", "🛠️", "#f39c12")
-        ctk.CTkLabel(maint_body, text="Outils de correction en cas de problème d'affichage ou de données.", font=self.app.font_regular, text_color="gray").pack(anchor="w", pady=(0, 10))
+        if category == "Personnalisation":
+            self._build_personalization_settings(scroll_frame)
+        elif category == "Gestion des Données":
+            self._build_data_settings(scroll_frame)
+        elif category == "Maintenance":
+            self._build_maintenance_settings(scroll_frame)
+        elif category == "Debug / Tests":
+            self._build_debug_settings(scroll_frame, window)
+        elif category == "Zone de Danger":
+            self._build_danger_settings(scroll_frame)
+
+    def _build_personalization_settings(self, parent):
+        ctk.CTkButton(parent, text="Modifier les informations des PDF", font=self.app.font_button, command=self._open_pdf_settings_window, height=40).pack(fill="x", padx=20, pady=5)
+        ctk.CTkButton(parent, text="Changer le code PIN", font=self.app.font_button, command=self._open_change_pin_window, height=40).pack(fill="x", padx=20, pady=5)
         
-        btn_grid = ctk.CTkFrame(maint_body, fg_color="transparent")
-        btn_grid.pack(fill="x")
+        # Zoom UI
+        zoom_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        zoom_frame.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(zoom_frame, text="Zoom de l'interface :", font=self.app.font_button).pack(side="left", padx=10)
+        
+        current_zoom = settings_manager.get_ui_zoom()
+        zoom_values = ["80%", "90%", "100%", "110%", "120%", "150%"]
+        zoom_map = {"80%": 0.8, "90%": 0.9, "100%": 1.0, "110%": 1.1, "120%": 1.2, "150%": 1.5}
+        
+        current_zoom_str = "100%"
+        for k, v in zoom_map.items():
+            if abs(v - current_zoom) < 0.01:
+                current_zoom_str = k
+                break
+                
+        zoom_menu = ctk.CTkOptionMenu(zoom_frame, values=zoom_values, command=lambda v: self._change_zoom(zoom_map[v]))
+        zoom_menu.set(current_zoom_str)
+        zoom_menu.pack(side="right", padx=10)
+
+    def _build_data_settings(self, parent):
+        ctk.CTkButton(parent, text="Ouvrir le dossier de l'application", font=self.app.font_button, command=self._open_app_directory, height=40).pack(fill="x", padx=20, pady=5)
+
+    def _build_maintenance_settings(self, parent):
+        ctk.CTkLabel(parent, text="Outils de correction en cas de problème d'affichage ou de données.", font=self.app.font_regular, text_color="gray").pack(anchor="w", padx=20, pady=(0, 10))
+        
+        btn_grid = ctk.CTkFrame(parent, fg_color="transparent")
+        btn_grid.pack(fill="x", padx=20)
         ctk.CTkButton(btn_grid, text="Régénérer PDF Factures", font=self.app.font_button, command=self._regenerate_all_invoice_pdfs, height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ctk.CTkButton(btn_grid, text="Régénérer Excel Factures", font=self.app.font_button, command=self._regenerate_all_invoices_excel, height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
-        # 4. Debug
-        debug_body = create_section_card(content_frame, "Debug / Tests", "🐞", "#7f8c8d")
-        
-        debug_ctrl = ctk.CTkFrame(debug_body, fg_color="transparent")
-        debug_ctrl.pack(fill="x", pady=(0, 10))
+    def _build_debug_settings(self, parent, window):
+        debug_ctrl = ctk.CTkFrame(parent, fg_color="transparent")
+        debug_ctrl.pack(fill="x", padx=20, pady=(0, 10))
         ctk.CTkLabel(debug_ctrl, text="Nombre d'éléments à générer :", font=self.app.font_regular).pack(side="left")
         debug_count_entry = ctk.CTkEntry(debug_ctrl, width=60)
         debug_count_entry.pack(side="left", padx=10)
         debug_count_entry.insert(0, "5")
         
-        debug_btns = ctk.CTkFrame(debug_body, fg_color="transparent")
-        debug_btns.pack(fill="x")
+        debug_btns = ctk.CTkFrame(parent, fg_color="transparent")
+        debug_btns.pack(fill="x", padx=20)
         ctk.CTkButton(debug_btns, text="Générer Factures Test", font=self.app.font_button, command=lambda: self._generate_random_invoices(debug_count_entry, settings_window), height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ctk.CTkButton(debug_btns, text="Générer Frais Test", font=self.app.font_button, command=lambda: self._generate_random_expenses(debug_count_entry, settings_window), height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
-        # 5. Zone de Danger
-        danger_body = create_section_card(content_frame, "Zone de Danger", "☢️", "#e74c3c")
-        ctk.CTkLabel(danger_body, text="Attention : Ces actions sont irréversibles.", font=self.app.font_bold, text_color="#e74c3c").pack(anchor="w", pady=(0, 10))
+    def _build_danger_settings(self, parent):
+        ctk.CTkLabel(parent, text="Attention : Ces actions sont irréversibles.", font=self.app.font_bold, text_color="#e74c3c").pack(anchor="w", padx=20, pady=(0, 10))
         
         danger_style = {"fg_color": ("#ffebee", "#3e2723"), "text_color": "#e74c3c", "hover_color": ("#ffcdd2", "#5d4037"), "height": 40, "font": self.app.font_button}
         
-        ctk.CTkButton(danger_body, text="Supprimer TOUTES les données", command=self._delete_all_data, **danger_style).pack(fill="x", pady=5)
+        ctk.CTkButton(parent, text="Supprimer TOUTES les données", command=self._delete_all_data, **danger_style).pack(fill="x", padx=20, pady=5)
         
-        danger_grid = ctk.CTkFrame(danger_body, fg_color="transparent")
-        danger_grid.pack(fill="x", pady=5)
+        danger_grid = ctk.CTkFrame(parent, fg_color="transparent")
+        danger_grid.pack(fill="x", padx=20, pady=5)
         ctk.CTkButton(danger_grid, text="Supprimer Factures", command=self._delete_invoices, **danger_style).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ctk.CTkButton(danger_grid, text="Supprimer Frais", command=self._delete_expenses, **danger_style).pack(side="left", fill="x", expand=True, padx=5)
         
-        ctk.CTkButton(danger_body, text="Supprimer Budgets", command=self._delete_budgets, **danger_style).pack(fill="x", pady=5)
+        ctk.CTkButton(parent, text="Supprimer Budgets", command=self._delete_budgets, **danger_style).pack(fill="x", padx=20, pady=5)
+
+    def _change_zoom(self, new_zoom):
+        settings_manager.save_ui_zoom(new_zoom)
+        messagebox.showinfo("Redémarrage requis", "Le changement de zoom sera pris en compte au prochain démarrage de l'application.")
 
     def _open_app_directory(self):
         try:

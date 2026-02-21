@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from datetime import datetime
-from .data_manager import get_yearly_invoice_count, save_to_excel
+from .data_manager import get_next_sequence_id, save_to_excel, check_duplicate_invoice
 
 class InvoiceManager:
     def __init__(self, app):
@@ -115,15 +115,27 @@ class InvoiceManager:
                 messagebox.showerror("Erreur de date", "Le format de la date est invalide. Utilisez JJ/MM/AAAA.")
                 return
 
+            # --- Vérification anti-doublon ---
+            check_data = {
+                "Date": reference_date.strftime("%d/%m/%Y"),
+                "Nom": self.app.nom.get().strip(),
+                "Prenom": self.app.prenom.get().strip(),
+                "Montant": float(self.app.montant.get())
+            }
+            
+            if check_duplicate_invoice(check_data):
+                if not messagebox.askyesno("Doublon détecté", f"Une facture pour {check_data['Prenom']} {check_data['Nom']} d'un montant de {check_data['Montant']} € existe déjà à la date du {check_data['Date']}.\n\nVoulez-vous vraiment créer cette facture ?"):
+                    return
+
             invoice_year = reference_date.year
-            invoice_count_this_year = get_yearly_invoice_count(invoice_year)
-            sequence_id = f"{invoice_count_this_year + 1:04d}"
+            next_seq = get_next_sequence_id(invoice_year)
+            sequence_id = f"{next_seq:04d}"
             facture_id = f"{reference_date.strftime('%Y%m%d')}-{sequence_id}"
             
             data = {
                 "ID": facture_id,
                 "Date": reference_date.strftime("%d/%m/%Y"),
-                "Nom": self.app.nom.get().strip(),
+                "Nom": self.app.nom.get().strip().upper(),
                 "Prenom": self.app.prenom.get().strip(),
                 "Adresse": self.app.adresse.get().strip(),
                 "Prestation": self.app.prestation.get(),
@@ -151,7 +163,7 @@ class InvoiceManager:
                 data["Naissance_Enfant"] = self.app.enfant_dob.get().strip()
                 
                 prenom2 = self.app.prenom2.get().strip()
-                nom2 = self.app.nom2.get().strip()
+                nom2 = self.app.nom2.get().strip().upper()
                 if prenom2 and nom2:
                     data["Attention_de2"] = self.app.attention_var2.get()
                     data["Prenom2"], data["Nom2"] = prenom2, nom2
@@ -162,13 +174,13 @@ class InvoiceManager:
                 
                 for prenom_entry, nom_entry in self.family_member_entries:
                     prenom = prenom_entry.get().strip()
-                    nom = nom_entry.get().strip()
+                    nom = nom_entry.get().strip().upper()
                     if prenom or nom:
                         family_members.append(f"{prenom} {nom}".strip())
                 data["Membres_Famille"] = family_members
             elif is_couple_session:
                 prenom2 = self.app.prenom2_couple.get().strip()
-                nom2 = self.app.nom2_couple.get().strip()
+                nom2 = self.app.nom2_couple.get().strip().upper()
                 if prenom2 and nom2:
                     data["Prenom2"] = prenom2
                     data["Nom2"] = nom2
@@ -177,7 +189,7 @@ class InvoiceManager:
             save_to_excel(data)
             from .pdf_generator import generate_pdf
             pdf_file = generate_pdf(data)
-            self.app.invoice_actions.show_success_dialog(pdf_file)
+            self.app.invoice_actions.show_success_dialog(pdf_file, data)
             
             # Reset form
             self.app.nom.delete(0, 'end')

@@ -63,12 +63,12 @@ def create_menu(app):
     
     quit_btn_params = btn_params.copy()
     quit_btn_params.update({"fg_color": ("#ffebee", "#3e2723"), "text_color": "#e74c3c", "hover_color": ("#ffcdd2", "#5d4037")})
-    ctk.CTkButton(bottom_frame, text="🚪  Quitter", command=app.destroy, **quit_btn_params).pack(fill="x", pady=(10, 0))
+    ctk.CTkButton(bottom_frame, text="🚪  Quitter", command=app.on_closing, **quit_btn_params).pack(fill="x", pady=(10, 0))
 
     # =================================================================================
     # 2. TABLEAU DE BORD (DROITE)
     # =================================================================================
-    content = ctk.CTkFrame(app.menu_frame, corner_radius=0, fg_color="transparent")
+    content = ctk.CTkScrollableFrame(app.menu_frame, corner_radius=0, fg_color="transparent")
     content.grid(row=0, column=1, sticky="nsew", padx=40, pady=40)
     content.grid_columnconfigure((0, 1), weight=1)
 
@@ -111,7 +111,7 @@ def create_menu(app):
 
     # --- Grille des KPIs ---
     create_kpi_card(content, 1, 0, "CA Encaissé (Mois)", "kpi_revenue_label", "#2ecc71", "📈", "revenue_month")
-    create_kpi_card(content, 1, 1, "Consultations (Mois)", "kpi_sessions_label", ("gray10", "gray90"), "users", "sessions_month") # users icon fallback text
+    create_kpi_card(content, 1, 1, "Consultations (Mois / Année)", "kpi_sessions_label", ("gray10", "gray90"), "👥", "sessions_month")
     create_kpi_card(content, 2, 0, "Total Impayés", "kpi_unpaid_label", "#e74c3c", "⚠️", "unpaid")
     create_kpi_card(content, 2, 1, "Dépenses (Mois)", "kpi_expenses_label", "#f39c12", "📉", "expenses_month")
 
@@ -145,3 +145,15 @@ def create_menu(app):
     app.salary_progress_bar = ctk.CTkProgressBar(progress_box, width=200, height=12, corner_radius=6)
     app.salary_progress_bar.pack()
     app.salary_progress_bar.set(0)
+
+    # --- Graphique Évolution ---
+    ctk.CTkLabel(content, text="Évolution du Chiffre d'Affaires (6 mois)", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=5, column=0, columnspan=2, sticky="w", pady=(30, 10))
+    
+    app.dashboard_chart_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
+    app.dashboard_chart_frame.grid(row=6, column=0, columnspan=2, padx=10, sticky="ew")
+
+    # --- Dernières Factures ---
+    ctk.CTkLabel(content, text="Dernières Factures", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=7, column=0, columnspan=2, sticky="w", pady=(30, 10))
+    
+    app.dashboard_recent_invoices_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
+    app.dashboard_recent_invoices_frame.grid(row=8, column=0, columnspan=2, padx=10, sticky="ew")

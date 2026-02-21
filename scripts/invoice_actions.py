@@ -132,11 +132,11 @@ class InvoiceActions:
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur : {e}")
 
-    def show_success_dialog(self, pdf_path):
+    def show_success_dialog(self, pdf_path, invoice_data=None):
         """Affiche une boîte de dialogue de succès."""
         dialog = ctk.CTkToplevel(self.app)
         dialog.title("Succès")
-        dialog.geometry("400x420")
+        dialog.geometry("400x500")
         dialog.transient(self.app)
         dialog.grab_set()
         
@@ -154,7 +154,29 @@ class InvoiceActions:
         ctk.CTkButton(btn_frame, text="🖨️  Imprimer", command=lambda: os.startfile(pdf_path, "print"), fg_color="transparent", border_width=1, text_color=("#1E1E1E", "#E0E0E0"), height=40, font=self.app.font_button).pack(pady=8, fill="x")
         ctk.CTkButton(btn_frame, text="📅  Ouvrir Doctolib", command=lambda: webbrowser.open("https://pro.doctolib.fr/patient_messaging"), fg_color="transparent", border_width=1, text_color=("#1E1E1E", "#E0E0E0"), height=40, font=self.app.font_button).pack(pady=8, fill="x")
         
+        if invoice_data:
+            ctk.CTkButton(btn_frame, text="❌  Annuler la facture", command=lambda: self._cancel_last_invoice(dialog, invoice_data), fg_color="#e74c3c", hover_color="#c0392b", height=40, font=self.app.font_button).pack(pady=8, fill="x")
+
         ctk.CTkButton(dialog, text="Fermer", command=dialog.destroy, fg_color="gray50", height=40, font=self.app.font_button).pack(pady=(10, 20), padx=50, fill="x")
+
+    def _cancel_last_invoice(self, dialog, invoice_data):
+        """Annule (supprime) la facture qui vient d'être créée."""
+        if messagebox.askyesno("Annulation", f"Voulez-vous vraiment annuler et supprimer la facture {invoice_data['ID']} ?\n\nLe fichier PDF et l'entrée Excel seront supprimés."):
+            if delete_invoice(invoice_data):
+                # Suppression du PDF
+                pdf_path = get_invoice_path(invoice_data)
+                if os.path.exists(pdf_path):
+                    try: os.remove(pdf_path)
+                    except Exception as e: print(f"Erreur suppression PDF: {e}")
+
+                self.app._invalidate_data_cache()
+                dialog.destroy()
+                messagebox.showinfo("Succès", "La facture a été annulée.")
+                
+                if hasattr(self.app, '_update_dashboard_kpis'):
+                    self.app._update_dashboard_kpis()
+            else:
+                messagebox.showerror("Erreur", "Impossible de supprimer la facture du registre.")
 
     def view_invoice_pdf(self, invoice_data):
         """Ouvre le visualiseur de PDF interne."""

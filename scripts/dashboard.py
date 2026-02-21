@@ -13,14 +13,15 @@ def load_dashboard_data(app):
     try:
         now = datetime.now()
         # Optimisation : On ne vide plus le cache ici systématiquement.
-        invoices_df = app._load_data_with_cache()
+        invoices_df = app._load_data_with_cache().copy() # Travaille sur une copie pour ne pas altérer le cache
         expenses_df = load_expenses(now.year)
 
-        revenue_month, sessions_month, unpaid_total, expenses_month = 0.0, 0, 0.0, 0.0
+        revenue_month, sessions_month, sessions_year, unpaid_total, expenses_month = 0.0, 0, 0, 0.0, 0.0
         
         # --- Chart Data ---
         chart_labels = []
         chart_values = []
+        recent_invoices = []
 
         if not invoices_df.empty:
             invoices_df['Date'] = pd.to_datetime(invoices_df['Date'], format='%d/%m/%Y', errors='coerce')
@@ -31,6 +32,9 @@ def load_dashboard_data(app):
 
             monthly_invoices = invoices_df[(invoices_df['Date'].dt.year == now.year) & (invoices_df['Date'].dt.month == now.month)]
             sessions_month = len(monthly_invoices)
+            
+            yearly_invoices = invoices_df[invoices_df['Date'].dt.year == now.year]
+            sessions_year = len(yearly_invoices)
             
             paid_monthly_invoices = paid_invoices_df[(paid_invoices_df['Date'].dt.year == now.year) & (paid_invoices_df['Date'].dt.month == now.month)]
             revenue_month = paid_monthly_invoices['Montant'].sum()
@@ -46,6 +50,10 @@ def load_dashboard_data(app):
                     (paid_invoices_df['Date'].dt.month == target_date.month)
                 ]['Montant'].sum()
                 chart_values.append(monthly_revenue)
+            
+            # Récupère les 5 dernières factures
+            recent_df = invoices_df.sort_values(by='Date', ascending=False).head(5)
+            recent_invoices = recent_df.to_dict('records')
 
         if not expenses_df.empty:
             expenses_df['Date'] = pd.to_datetime(expenses_df['Date'], format='%d/%m/%Y', errors='coerce')
@@ -75,6 +83,7 @@ def load_dashboard_data(app):
         return {
             "revenue_month": revenue_month,
             "sessions_month": sessions_month,
+            "sessions_year": sessions_year,
             "unpaid_total": unpaid_total,
             "expenses_month": expenses_month,
             "salary_metrics": {
@@ -83,6 +92,8 @@ def load_dashboard_data(app):
                 "prov_ops": prov_ops,
                 "progress": progress
             },
+            "chart_data": {"labels": chart_labels, "values": chart_values},
+            "recent_invoices": recent_invoices,
             "success": True
         }
     except Exception as e:
@@ -95,7 +106,7 @@ def update_dashboard_views(app, data):
         return
 
     app.kpi_revenue_label.configure(text=f"{data['revenue_month']:,.2f} €".replace(",", " "))
-    app.kpi_sessions_label.configure(text=f"{data['sessions_month']}")
+    app.kpi_sessions_label.configure(text=f"{data['sessions_month']} / {data['sessions_year']}")
     app.kpi_unpaid_label.configure(text=f"{data['unpaid_total']:,.2f} €".replace(",", " "))
     app.kpi_expenses_label.configure(text=f"{data['expenses_month']:,.2f} €".replace(",", " "))
     
@@ -119,6 +130,14 @@ def update_dashboard_views(app, data):
             # La barre devient verte si l'objectif est atteint, sinon elle reste bleue
             bar_color = "#2ecc71" if progress >= 1.0 else "#3498db"
             app.salary_progress_bar.configure(progress_color=bar_color)
+            
+    # Mise à jour du Graphique
+    if hasattr(app, 'dashboard_chart_frame') and "chart_data" in data:
+        _update_main_chart(app, data["chart_data"])
+
+    # Mise à jour des Dernières Factures
+    if hasattr(app, 'dashboard_recent_invoices_frame') and "recent_invoices" in data:
+        _update_recent_invoices(app, data["recent_invoices"])
 
 def on_kpi_click(app, kpi_name):
     """Gère le clic sur un indicateur du tableau de bord."""
@@ -143,3 +162,59 @@ def on_kpi_click(app, kpi_name):
 
     elif kpi_name == "expenses_month":
         app._show_tool(app.expenses_wrapper)
+
+def _update_main_chart(app, chart_data):
+    """Affiche le graphique d'évolution du CA."""
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    
+    for widget in app.dashboard_chart_frame.winfo_children():
+        widget.destroy()
+
+    try:
+        # Couleurs adaptées au thème (approximatif)
+        bg_color = '#FFFFFF' if ctk.get_appearance_mode() == "Light" else '#2b2b2b'
+        text_color = 'gray'
+        
+        fig, ax = plt.subplots(figsize=(6, 2.5), dpi=100)
+        fig.patch.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
+        
+        bars = ax.bar(chart_data['labels'], chart_data['values'], color='#3498db', width=0.5)
+        
+        # Style minimaliste
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.spines['bottom'].set_color('#DDDDDD')
+        ax.tick_params(axis='x', colors=text_color)
+        ax.tick_params(axis='y', colors=text_color, labelsize=8)
+        
+        canvas = FigureCanvasTkAgg(fig, master=app.dashboard_chart_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=5)
+        plt.close(fig)
+    except Exception as e:
+        print(f"Erreur graphique dashboard: {e}")
+
+def _update_recent_invoices(app, invoices):
+    """Affiche la liste des dernières factures."""
+    for widget in app.dashboard_recent_invoices_frame.winfo_children():
+        widget.destroy()
+        
+    if not invoices:
+        ctk.CTkLabel(app.dashboard_recent_invoices_frame, text="Aucune facture récente.", text_color="gray").pack(pady=20)
+        return
+
+    for inv in invoices:
+        row = ctk.CTkFrame(app.dashboard_recent_invoices_frame, fg_color="transparent")
+        row.pack(fill="x", padx=15, pady=5)
+        
+        date_str = inv['Date'].strftime("%d/%m") if hasattr(inv['Date'], 'strftime') else str(inv['Date'])
+        ctk.CTkLabel(row, text=date_str, font=ctk.CTkFont(size=12), width=50, anchor="w", text_color="gray").pack(side="left")
+        
+        name = f"{inv.get('Prenom', '')} {inv.get('Nom', '')}"
+        ctk.CTkLabel(row, text=name, font=ctk.CTkFont(size=12, weight="bold"), anchor="w").pack(side="left", fill="x", expand=True)
+        
+        status_color = "#2ecc71" if inv.get('Methode_Paiement') != "Impayé" else "#e74c3c"
+        ctk.CTkLabel(row, text=f"{inv['Montant']:.0f} €", font=ctk.CTkFont(size=12, weight="bold"), text_color=status_color, width=60, anchor="e").pack(side="right")
