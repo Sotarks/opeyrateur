@@ -115,6 +115,13 @@ def create_menu(app):
     app.kpi_salary_details = ctk.CTkLabel(salary_frame, text="...", font=ctk.CTkFont(size=11), text_color="gray")
     app.kpi_salary_details.pack(pady=(0, 10))
     
+    # Barre de progression vers l'objectif
+    app.salary_progress_bar = ctk.CTkProgressBar(salary_frame, width=250, height=12, corner_radius=6)
+    app.salary_progress_bar.pack(pady=(0, 5))
+    app.salary_progress_bar.set(0)
+    
+    ctk.CTkLabel(salary_frame, text="Objectif : 2 000 € / mois", font=ctk.CTkFont(size=10), text_color="gray").pack(pady=(0, 10))
+    
     ToolTip(salary_frame, "Calcul basé sur la règle des 3 tiers pour le mois en cours :\n1/3 Charges, 1/3 Frais, 1/3 Salaire.\nLe montant affiché est ce qu'il reste après déduction\ndes frais réels du mois et des provisions nécessaires.")
 
     # Boutons

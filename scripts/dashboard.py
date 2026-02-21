@@ -66,6 +66,12 @@ def load_dashboard_data(app):
         cash_flow = revenue_month - expenses_month
         safe_salary = cash_flow - prov_taxes - prov_ops
 
+        # Calcul progression vers objectif (2000€)
+        salary_goal = 2000.0
+        progress = 0.0
+        if salary_goal > 0:
+            progress = max(0.0, min(1.0, safe_salary / salary_goal))
+
         return {
             "revenue_month": revenue_month,
             "sessions_month": sessions_month,
@@ -74,7 +80,8 @@ def load_dashboard_data(app):
             "salary_metrics": {
                 "safe_salary": safe_salary,
                 "prov_taxes": prov_taxes,
-                "prov_ops": prov_ops
+                "prov_ops": prov_ops,
+                "progress": progress
             },
             "success": True
         }
@@ -102,9 +109,16 @@ def update_dashboard_views(app, data):
         safe_salary = salary_data.get("safe_salary", 0.0)
         prov_taxes = salary_data.get("prov_taxes", 0.0)
         prov_ops = salary_data.get("prov_ops", 0.0)
+        progress = salary_data.get("progress", 0.0)
         
         app.kpi_salary_label.configure(text=f"{safe_salary:,.2f} €".replace(",", " "), text_color="#2ecc71" if safe_salary >= 0 else "#e74c3c")
         app.kpi_salary_details.configure(text=f"À provisionner : Charges {prov_taxes:,.0f}€ | Frais {prov_ops:,.0f}€")
+
+        if hasattr(app, 'salary_progress_bar'):
+            app.salary_progress_bar.set(progress)
+            # La barre devient verte si l'objectif est atteint, sinon elle reste bleue
+            bar_color = "#2ecc71" if progress >= 1.0 else "#3498db"
+            app.salary_progress_bar.configure(progress_color=bar_color)
 
 def on_kpi_click(app, kpi_name):
     """Gère le clic sur un indicateur du tableau de bord."""
