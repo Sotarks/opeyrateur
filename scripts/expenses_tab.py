@@ -10,131 +10,159 @@ import json
 
 def create_expenses_tab(app):
     """Crée les widgets pour l'onglet 'Frais'."""
-    app.expenses_tab.grid_columnconfigure(0, weight=1)
-    app.expenses_tab.grid_rowconfigure(1, weight=1)
+    # Configuration de la grille principale : 2 colonnes (Sidebar Saisie | Contenu Principal)
+    app.expenses_tab.grid_columnconfigure(0, weight=0, minsize=320) # Sidebar fixe
+    app.expenses_tab.grid_columnconfigure(1, weight=1) # Contenu extensible
+    app.expenses_tab.grid_rowconfigure(0, weight=1)
 
     app.expense_to_edit = None # Variable pour stocker les données originales de la dépense en cours de modification
     app.current_proof_path = None # Variable pour stocker le chemin du fichier sélectionné
 
-    # --- Formulaire d'ajout ---
-    form_frame = ctk.CTkFrame(app.expenses_tab, corner_radius=10)
-    form_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
-    form_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+    # =================================================================================
+    # 1. SIDEBAR DE SAISIE (GAUCHE)
+    # =================================================================================
+    sidebar = ctk.CTkFrame(app.expenses_tab, corner_radius=0, fg_color=("gray90", "gray16"))
+    sidebar.grid(row=0, column=0, sticky="nsew", padx=(0, 1)) # Petit espace à droite pour séparer
+    sidebar.grid_columnconfigure(0, weight=1)
 
-    ctk.CTkLabel(form_frame, text="Nouvelle Dépense", font=app.font_large).grid(row=0, column=0, columnspan=4, pady=(10, 5), padx=10, sticky="w")
+    # Titre Saisie
+    ctk.CTkLabel(sidebar, text="Saisie d'une dépense", font=app.font_large).pack(pady=(20, 15), padx=20, anchor="w")
 
+    # --- Champs du formulaire (Vertical) ---
+    
     # Date
-    ctk.CTkLabel(form_frame, text="Date").grid(row=1, column=0, padx=5, pady=5)
-    app.expense_date = ctk.CTkEntry(form_frame, placeholder_text="JJ/MM/AAAA")
-    app.expense_date.grid(row=2, column=0, padx=5, pady=(0, 10), sticky="ew")
+    ctk.CTkLabel(sidebar, text="Date", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
+    app.expense_date = ctk.CTkEntry(sidebar, placeholder_text="JJ/MM/AAAA", height=35)
+    app.expense_date.pack(pady=(0, 10), padx=20, fill="x")
     app.expense_date.insert(0, datetime.now().strftime("%d/%m/%Y"))
     app.expense_date.configure(state="readonly")
     app.expense_date.bind("<1>", lambda event: app._open_calendar(app.expense_date))
 
     # Catégorie
-    ctk.CTkLabel(form_frame, text="Catégorie").grid(row=1, column=1, padx=5, pady=5)
+    ctk.CTkLabel(sidebar, text="Catégorie", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
     categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
                   "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
                   "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
-    app.expense_cat = ctk.CTkOptionMenu(form_frame, values=categories)
-    app.expense_cat.grid(row=2, column=1, padx=5, pady=(0, 10), sticky="ew")
+    app.expense_cat = ctk.CTkComboBox(sidebar, values=categories, height=35)
+    app.expense_cat.pack(pady=(0, 10), padx=20, fill="x")
+
+    # Filtrage dynamique des catégories (Autocomplétion)
+    def _filter_categories(event):
+        current_text = app.expense_cat.get()
+        filtered_values = [cat for cat in categories if current_text.lower() in cat.lower()]
+        app.expense_cat.configure(values=filtered_values)
+
+    app.expense_cat._entry.bind("<KeyRelease>", _filter_categories)
 
     # Description
-    ctk.CTkLabel(form_frame, text="Description").grid(row=1, column=2, padx=5, pady=5)
-    app.expense_desc = ctk.CTkEntry(form_frame, placeholder_text="Ex: Cabinet")
-    app.expense_desc.grid(row=2, column=2, padx=5, pady=(0, 10), sticky="ew")
+    ctk.CTkLabel(sidebar, text="Description", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
+    app.expense_desc = ctk.CTkEntry(sidebar, placeholder_text="Ex: Achat fournitures...", height=35)
+    app.expense_desc.pack(pady=(0, 10), padx=20, fill="x")
 
     # Montant
-    ctk.CTkLabel(form_frame, text="Montant (€)").grid(row=1, column=3, padx=5, pady=5)
-    app.expense_amount = ctk.CTkEntry(form_frame, placeholder_text="0.00")
-    app.expense_amount.grid(row=2, column=3, padx=5, pady=(0, 10), sticky="ew")
+    ctk.CTkLabel(sidebar, text="Montant (€)", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
+    app.expense_amount = ctk.CTkEntry(sidebar, placeholder_text="0.00", height=35, font=ctk.CTkFont(size=16, weight="bold"))
+    app.expense_amount.pack(pady=(0, 15), padx=20, fill="x")
 
-    # Justificatif (Ligne suivante)
-    ctk.CTkLabel(form_frame, text="Justificatif (Image/PDF) :").grid(row=3, column=0, sticky="e", padx=5, pady=5)
-    app.proof_label = ctk.CTkLabel(form_frame, text="Aucun fichier sélectionné", text_color="gray")
-    app.proof_label.grid(row=3, column=1, columnspan=2, sticky="w", padx=5, pady=5)
-    ctk.CTkButton(form_frame, text="Parcourir...", width=100, command=lambda: _select_proof(app)).grid(row=3, column=3, padx=5, pady=5)
-    ctk.CTkButton(form_frame, text="Coller", width=60, command=lambda: _paste_proof(app), fg_color="#546E7A", hover_color="#455A64").grid(row=3, column=4, padx=(0, 5), pady=5)
+    # Zone Justificatif (Card style)
+    ctk.CTkLabel(sidebar, text="Justificatif", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
+    
+    proof_frame = ctk.CTkFrame(sidebar, fg_color=("white", "gray20"), border_width=1, border_color=("gray70", "gray30"))
+    proof_frame.pack(pady=(0, 20), padx=20, fill="x")
+    
+    app.proof_label = ctk.CTkLabel(proof_frame, text="Aucun fichier", text_color="gray", font=ctk.CTkFont(size=12))
+    app.proof_label.pack(pady=(10, 5))
+    
+    proof_btn_frame = ctk.CTkFrame(proof_frame, fg_color="transparent")
+    proof_btn_frame.pack(pady=(0, 10), fill="x", padx=10)
+    
+    ctk.CTkButton(proof_btn_frame, text="📂 Parcourir", width=80, height=25, command=lambda: _select_proof(app), font=ctk.CTkFont(size=11)).pack(side="left", padx=2, expand=True, fill="x")
+    ctk.CTkButton(proof_btn_frame, text="📋 Coller", width=60, height=25, command=lambda: _paste_proof(app), fg_color="#546E7A", hover_color="#455A64", font=ctk.CTkFont(size=11)).pack(side="left", padx=2, expand=True, fill="x")
 
-    # Boutons d'action
-    action_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-    action_frame.grid(row=4, column=0, columnspan=4, pady=10, padx=20, sticky="ew")
-    action_frame.grid_columnconfigure((0, 1), weight=1)
-
-    app.add_expense_btn = ctk.CTkButton(form_frame, text="Ajouter la dépense", command=lambda: _add_expense(app), font=app.font_button)
-    app.add_expense_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-    app.cancel_edit_expense_btn = ctk.CTkButton(action_frame, text="Annuler", command=lambda: _cancel_edit_expense(app), fg_color="gray50", font=app.font_button)
+    # Boutons de validation
+    app.add_expense_btn = ctk.CTkButton(sidebar, text="Ajouter la dépense", command=lambda: _add_expense(app), font=app.font_button, height=45)
+    app.add_expense_btn.pack(pady=5, padx=20, fill="x")
+    
     app.original_btn_color = app.add_expense_btn.cget("fg_color") # Sauvegarde la couleur par défaut
 
-    # --- Liste des frais ---
-    list_frame = ctk.CTkFrame(app.expenses_tab, corner_radius=10)
-    list_frame.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
-    list_frame.grid_columnconfigure(0, weight=1)
-    list_frame.grid_rowconfigure(2, weight=1)
+    app.cancel_edit_expense_btn = ctk.CTkButton(sidebar, text="Annuler la modification", command=lambda: _cancel_edit_expense(app), fg_color="gray50", hover_color="#B71C1C", font=app.font_button, height=35)
+    # Le bouton annuler est caché par défaut (pack_forget)
 
-    header_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
-    header_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
-    ctk.CTkLabel(header_frame, text="Liste des frais", font=app.font_large).pack(side="left")
+    # =================================================================================
+    # 2. CONTENU PRINCIPAL (DROITE)
+    # =================================================================================
+    main_content = ctk.CTkFrame(app.expenses_tab, corner_radius=0, fg_color="transparent")
+    main_content.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+    main_content.grid_columnconfigure(0, weight=1)
+    main_content.grid_rowconfigure(1, weight=1) # Le tableau prend toute la place
 
-    # --- Filtres ---
+    # --- Barre d'outils supérieure (Filtres + Actions) ---
+    toolbar_frame = ctk.CTkFrame(main_content, fg_color="transparent")
+    toolbar_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+    
+    # Filtres (Gauche)
     from .data_manager import get_available_years, MONTHS_FR
-    
-    filter_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
-    filter_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
-    
-    # Variables de filtre
+    filter_container = ctk.CTkFrame(toolbar_frame, fg_color="transparent")
+    filter_container.pack(side="left")
+
     app.expense_view_type = ctk.StringVar(value="Année")
     years = get_available_years()
     if not years: years = [str(datetime.now().year)]
     app.expense_filter_year = ctk.StringVar(value=years[0])
     app.expense_filter_category = ctk.StringVar(value="Toutes")
-    
     current_month_idx = datetime.now().month - 1
     app.expense_filter_month = ctk.StringVar(value=MONTHS_FR[current_month_idx])
     app.expense_filter_start = ctk.StringVar(value=MONTHS_FR[0])
     app.expense_filter_end = ctk.StringVar(value=MONTHS_FR[current_month_idx])
 
-    # Widgets de filtre
-    ctk.CTkLabel(filter_frame, text="Filtrer par :").pack(side="left", padx=(0, 5))
-    ctk.CTkOptionMenu(filter_frame, variable=app.expense_filter_year, values=years, width=80).pack(side="left", padx=5)
-    
+    ctk.CTkLabel(filter_container, text="Filtres :", font=app.font_bold).pack(side="left", padx=(0, 5))
+    ctk.CTkOptionMenu(filter_container, variable=app.expense_filter_year, values=years, width=80).pack(side="left", padx=5)
     filter_categories = ["Toutes"] + categories
-    ctk.CTkOptionMenu(filter_frame, variable=app.expense_filter_category, values=filter_categories, width=120).pack(side="left", padx=5)
-    
-    app.expense_view_selector = ctk.CTkSegmentedButton(filter_frame, values=["Année", "Mois", "Période"], variable=app.expense_view_type, command=lambda v: _update_filter_visibility(app))
+    ctk.CTkOptionMenu(filter_container, variable=app.expense_filter_category, values=filter_categories, width=140).pack(side="left", padx=5)
+    app.expense_view_selector = ctk.CTkSegmentedButton(filter_container, values=["Année", "Mois", "Période"], variable=app.expense_view_type, command=lambda v: _update_filter_visibility(app))
     app.expense_view_selector.pack(side="left", padx=10)
     
-    app.expense_month_menu = ctk.CTkOptionMenu(filter_frame, variable=app.expense_filter_month, values=MONTHS_FR, width=110)
-    
-    app.expense_period_frame = ctk.CTkFrame(filter_frame, fg_color="transparent")
+    app.expense_month_menu = ctk.CTkOptionMenu(filter_container, variable=app.expense_filter_month, values=MONTHS_FR, width=110)
+    app.expense_period_frame = ctk.CTkFrame(filter_container, fg_color="transparent")
     ctk.CTkLabel(app.expense_period_frame, text="de").pack(side="left", padx=2)
     ctk.CTkOptionMenu(app.expense_period_frame, variable=app.expense_filter_start, values=MONTHS_FR, width=100).pack(side="left", padx=2)
     ctk.CTkLabel(app.expense_period_frame, text="à").pack(side="left", padx=2)
     ctk.CTkOptionMenu(app.expense_period_frame, variable=app.expense_filter_end, values=MONTHS_FR, width=100).pack(side="left", padx=2)
-
-    ctk.CTkButton(filter_frame, text="Appliquer", command=lambda: refresh_expenses_list(app), width=80, fg_color="#546E7A").pack(side="left", padx=10)
     
+    ctk.CTkButton(filter_container, text="🔄", width=40, command=lambda: refresh_expenses_list(app), fg_color="#546E7A").pack(side="left", padx=5)
     _update_filter_visibility(app) # Initialisation affichage
 
-    # Frame for buttons on the right
-    button_container = ctk.CTkFrame(header_frame, fg_color="transparent")
-    button_container.pack(side="right")
-
-    ctk.CTkButton(button_container, text="Gérer les récurrents", command=lambda: _open_recurring_expenses_window(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button).pack(side="left", padx=(0, 5))
-    ctk.CTkButton(button_container, text="Générer mensuels", command=lambda: _generate_monthly_expenses(app), fg_color="#E67E22", hover_color="#D35400", font=app.font_button).pack(side="left", padx=(0, 5))
-    ctk.CTkButton(button_container, text="Ouvrir PDF", command=lambda: _view_pdf_report(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button).pack(side="left", padx=(0, 5))
+    # Actions (Droite)
+    actions_container = ctk.CTkFrame(toolbar_frame, fg_color="transparent")
+    actions_container.pack(side="right")
     
-    btn_import = ctk.CTkButton(button_container, text="Importer CSV Banque", command=lambda: _import_bank_csv(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button)
-    btn_import.pack(side="left", padx=(0, 5))
+    # Boutons compacts avec icônes/texte court
+    ctk.CTkButton(actions_container, text="📅 Récurrents", width=100, command=lambda: _open_recurring_expenses_window(app), fg_color="#546E7A").pack(side="left", padx=2)
+    ctk.CTkButton(actions_container, text="⚡ Générer", width=80, command=lambda: _generate_monthly_expenses(app), fg_color="#E67E22", hover_color="#D35400").pack(side="left", padx=2)
     
-    ctk.CTkButton(button_container, text="Télécharger PDF URSSAF", fg_color="#34D399", hover_color="#10B981", command=lambda: _generate_pdf_report(app), font=app.font_button).pack(side="left", padx=(0, 5))
-    ctk.CTkButton(button_container, text="Export FEC (.fec)", command=lambda: _export_fec_expenses(app), fg_color="#546E7A", hover_color="#455A64", font=app.font_button).pack(side="left", padx=(0, 5))
-    ctk.CTkButton(button_container, text="Ouvrir le dossier", command=_open_expenses_folder, font=app.font_button).pack(side="left", padx=(0, 5))
-    ctk.CTkButton(button_container, text="Réinitialiser les frais", fg_color="#D32F2F", hover_color="#B71C1C", command=lambda: _reset_expenses(app), font=app.font_button).pack(side="left")
+    # Menu déroulant pour les exports/imports pour gagner de la place
+    def show_export_menu():
+        menu = tk.Menu(app, tearoff=0)
+        menu.add_command(label="📄 Ouvrir PDF", command=lambda: _view_pdf_report(app))
+        menu.add_command(label="📥 Importer CSV Banque", command=lambda: _import_bank_csv(app))
+        menu.add_command(label="📊 Télécharger PDF URSSAF", command=lambda: _generate_pdf_report(app))
+        menu.add_command(label="⚖️ Export FEC (.fec)", command=lambda: _export_fec_expenses(app))
+        menu.add_separator()
+        menu.add_command(label="📂 Ouvrir le dossier", command=_open_expenses_folder)
+        menu.add_command(label="🗑️ Réinitialiser tout", command=lambda: _reset_expenses(app))
+        try:
+            x = export_btn.winfo_rootx()
+            y = export_btn.winfo_rooty() + export_btn.winfo_height()
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
 
-    # Treeview pour afficher les données (style tableau)
+    export_btn = ctk.CTkButton(actions_container, text="Outils & Exports ▼", command=show_export_menu, fg_color="#34495E", width=120)
+    export_btn.pack(side="left", padx=5)
+
+    # --- Tableau des frais (Treeview) ---
     columns = ("date", "cat", "desc", "montant", "proof_status", "proof_path", "expense_id")
-    app.expenses_tree = ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse", displaycolumns=("date", "cat", "desc", "montant", "proof_status"))
+    app.expenses_tree = ttk.Treeview(main_content, columns=columns, show="headings", selectmode="browse", displaycolumns=("date", "cat", "desc", "montant", "proof_status"))
     
     app.expenses_tree.heading("date", text="Date", command=lambda: _sort_expenses_by(app, "date"))
     app.expenses_tree.heading("cat", text="Catégorie", command=lambda: _sort_expenses_by(app, "cat"))
@@ -148,10 +176,10 @@ def create_expenses_tab(app):
     app.expenses_tree.column("montant", width=100, anchor="e")
     app.expenses_tree.column("proof_status", width=60, anchor="center")
 
-    app.expenses_tree.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
+    app.expenses_tree.grid(row=1, column=0, sticky="nsew")
 
     # Scrollbar
-    scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=app.expenses_tree.yview)
+    scrollbar = ttk.Scrollbar(main_content, orient="vertical", command=app.expenses_tree.yview)
     app.expenses_tree.configure(yscrollcommand=scrollbar.set)
     scrollbar.grid(row=1, column=1, sticky="ns")
 
@@ -211,10 +239,21 @@ def _paste_proof(app):
 def _add_expense(app):
     try:
         from .data_manager import save_expense
+        
+        # Validation stricte de la catégorie
+        category = app.expense_cat.get().strip()
+        valid_categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
+                      "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
+                      "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
+
+        if not category or category not in valid_categories:
+            messagebox.showwarning("Catégorie invalide", "Veuillez sélectionner une catégorie valide dans la liste.")
+            return
+
         montant = float(app.expense_amount.get().replace(',', '.'))
         data = {
             "Date": app.expense_date.get(),
-            "Categorie": app.expense_cat.get(),
+            "Categorie": category,
             "Description": app.expense_desc.get(),
             "Montant": montant,
             "ProofPath": app.current_proof_path
@@ -497,7 +536,7 @@ def _prepare_edit_expense(app):
     
     # Change le bouton en mode "Modifier"
     app.add_expense_btn.configure(text="Modifier la dépense", fg_color="#e67e22", command=lambda: _update_expense(app))
-    app.cancel_edit_expense_btn.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+    app.cancel_edit_expense_btn.pack(pady=(0, 5), padx=20, fill="x")
 
 def _update_expense(app):
     """Supprime l'ancienne dépense et ajoute la nouvelle."""
@@ -523,7 +562,7 @@ def _cancel_edit_expense(app):
 
     # Réinitialise les boutons
     app.add_expense_btn.configure(text="Ajouter la dépense", fg_color=app.original_btn_color, command=lambda: _add_expense(app))
-    app.cancel_edit_expense_btn.grid_forget()
+    app.cancel_edit_expense_btn.pack_forget()
 
 def _sort_expenses_by(app, col):
     """Trie le Treeview des dépenses par colonne."""
@@ -626,8 +665,16 @@ def _open_recurring_expenses_window(app):
     categories = ["Loyer", "Doctolib / Logiciels", "Supervision", "Mouchoirs / Café", "Papeterie / Tests", 
                   "Électricité / Gaz", "Téléphone / Internet", "Assurance RCP", "Formation", "Repas (seule)", 
                   "Banque", "Ménage", "Assurance Local", "Site Web", "Déplacement", "Cotisations", "Tenue Pro", "Autre"]
-    cat_var = ctk.CTkOptionMenu(add_frame, values=categories)
+    cat_var = ctk.CTkComboBox(add_frame, values=categories)
     cat_var.grid(row=1, column=0, padx=5, pady=5)
+
+    # Filtrage dynamique pour les récurrents
+    def _filter_recurring_categories(event):
+        current_text = cat_var.get()
+        filtered_values = [cat for cat in categories if current_text.lower() in cat.lower()]
+        cat_var.configure(values=filtered_values)
+
+    cat_var._entry.bind("<KeyRelease>", _filter_recurring_categories)
     
     desc_entry = ctk.CTkEntry(add_frame, placeholder_text="Description")
     desc_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
@@ -809,7 +856,7 @@ def _export_fec_expenses(app):
             except Exception: continue
         
         # --- Validation du fichier FEC ---
-        from .utils import validate_fec_content
+        from .utils import validate_fec_content, FECPreviewWindow
         is_valid, errors = validate_fec_content(lines)
         
         if not is_valid:
@@ -818,15 +865,19 @@ def _export_fec_expenses(app):
             if not messagebox.askyesno("Validation FEC échouée", f"Le fichier contient des erreurs :\n{error_msg}\n\nVoulez-vous quand même l'enregistrer ?"):
                 return
 
-        # --- Enregistrement ---
-        filename = f"{siren}FEC_Frais_{datetime.now().strftime('%Y%m%d')}.txt"
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".txt", initialfile=filename, title="Enregistrer le fichier FEC Frais", filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
-        )
-        if not filepath: return
+        # --- Prévisualisation et Enregistrement ---
+        def save_action():
+            filename = f"{siren}FEC_Frais_{datetime.now().strftime('%Y%m%d')}.txt"
+            filepath = filedialog.asksaveasfilename(
+                defaultextension=".txt", initialfile=filename, title="Enregistrer le fichier FEC Frais", filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
+            )
+            if not filepath: return
 
-        with open(filepath, 'w', encoding='utf-8') as f: f.write("\n".join(lines))
-        messagebox.showinfo("Succès", f"Fichier FEC Frais généré :\n{filepath}")
+            with open(filepath, 'w', encoding='utf-8') as f: f.write("\n".join(lines))
+            messagebox.showinfo("Succès", f"Fichier FEC Frais généré :\n{filepath}")
+
+        FECPreviewWindow(app, lines, save_action)
+
     except Exception as e:
         messagebox.showerror("Erreur", f"Erreur FEC : {e}")
 

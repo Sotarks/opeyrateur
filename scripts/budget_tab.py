@@ -374,7 +374,7 @@ def _export_fec(app):
                 continue
         
         # --- Validation du fichier FEC ---
-        from .utils import validate_fec_content
+        from .utils import validate_fec_content, FECPreviewWindow
         is_valid, errors = validate_fec_content(lines)
         
         if not is_valid:
@@ -383,17 +383,20 @@ def _export_fec(app):
             if not messagebox.askyesno("Validation FEC échouée", f"Le fichier contient des erreurs :\n{error_msg}\n\nVoulez-vous quand même l'enregistrer ?"):
                 return
 
-        # --- Enregistrement ---
-        filename = f"{siren}FEC{datetime.now().strftime('%Y%m%d')}.txt"
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".txt", initialfile=filename, title="Enregistrer le fichier FEC (Format Légal)", filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
-        )
-        if not filepath: return
+        # --- Prévisualisation et Enregistrement ---
+        def save_action():
+            filename = f"{siren}FEC{datetime.now().strftime('%Y%m%d')}.txt"
+            filepath = filedialog.asksaveasfilename(
+                defaultextension=".txt", initialfile=filename, title="Enregistrer le fichier FEC (Format Légal)", filetypes=[("Fichier FEC", "*.txt"), ("Tous les fichiers", "*.*")]
+            )
+            if not filepath: return
 
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write("\n".join(lines))
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("\n".join(lines))
+                
+            messagebox.showinfo("Succès", f"Fichier FEC généré avec succès :\n{filepath}")
             
-        messagebox.showinfo("Succès", f"Fichier FEC généré avec succès :\n{filepath}")
+        FECPreviewWindow(app, lines, save_action)
         
     except Exception as e:
         messagebox.showerror("Erreur", f"Impossible de générer le fichier FEC :\n{e}")

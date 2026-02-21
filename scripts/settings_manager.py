@@ -35,10 +35,10 @@ DEFAULT_SETTINGS = {
     'Expenses': {
         'recurring': json.dumps([
             {"Categorie": "Loyer", "Description": "Loyer / Cabinet", "Montant": 560.0, "ProofPath": ""},
-            {"Categorie": "Cotisations", "Description": "Doctolib", "Montant": 149.0, "ProofPath": ""},
-            {"Categorie": "Cotisations", "Description": "Responsabilité civile pro", "Montant": 12.5, "ProofPath": ""},
-            {"Categorie": "Cotisations", "Description": "Assurance cabinet", "Montant": 11.4, "ProofPath": ""},
-            {"Categorie": "Autre", "Description": "Téléphone", "Montant": 1.99, "ProofPath": ""},
+            {"Categorie": "Doctolib / Logiciels", "Description": "Doctolib", "Montant": 149.0, "ProofPath": ""},
+            {"Categorie": "Assurance RCP", "Description": "Responsabilité civile pro", "Montant": 12.5, "ProofPath": ""},
+            {"Categorie": "Assurance Local", "Description": "Assurance cabinet", "Montant": 11.4, "ProofPath": ""},
+            {"Categorie": "Téléphone / Internet", "Description": "Téléphone", "Montant": 1.99, "ProofPath": ""},
             {"Categorie": "Déplacement", "Description": "Essence", "Montant": 120.0, "ProofPath": ""},
             {"Categorie": "Cotisations", "Description": "Mutuelle", "Montant": 5.0, "ProofPath": ""},
             {"Categorie": "Repas (seule)", "Description": "Nourriture", "Montant": 80.0, "ProofPath": ""}

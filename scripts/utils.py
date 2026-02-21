@@ -72,3 +72,30 @@ def validate_fec_content(lines):
     if errors:
         return False, errors
     return True, []
+
+class FECPreviewWindow(ctk.CTkToplevel):
+    """Fenêtre de prévisualisation du contenu FEC avant enregistrement."""
+    def __init__(self, parent, lines, save_command):
+        super().__init__(parent)
+        self.title("Prévisualisation FEC")
+        self.geometry("1100x600")
+        self.transient(parent)
+        self.grab_set()
+        
+        ctk.CTkLabel(self, text="Aperçu du fichier FEC", font=("Montserrat", 16, "bold")).pack(pady=(15, 5))
+        ctk.CTkLabel(self, text="Vérifiez le contenu avant l'enregistrement.", text_color="gray").pack(pady=(0, 10))
+
+        self.textbox = ctk.CTkTextbox(self, font=("Courier New", 12), wrap="none")
+        self.textbox.pack(fill="both", expand=True, padx=20, pady=10)
+        self.textbox.insert("1.0", "\n".join(lines))
+        self.textbox.configure(state="disabled")
+        
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=20)
+        
+        ctk.CTkButton(btn_frame, text="Enregistrer le fichier", command=self.save_and_close, fg_color="#2ecc71", hover_color="#27ae60", height=40).pack(side="right", padx=5)
+        ctk.CTkButton(btn_frame, text="Annuler", command=self.destroy, fg_color="gray50", hover_color="gray30", height=40).pack(side="right", padx=5)
+        
+    def save_and_close(self):
+        self.destroy()
+        self.save_command()
