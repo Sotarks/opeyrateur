@@ -51,7 +51,8 @@ def create_menu(app):
 
     ctk.CTkButton(nav_frame, text="📝  Nouvelle Facture", command=lambda: app._show_tool(app.new_invoice_wrapper), **btn_params).pack(fill="x", pady=2)
     ctk.CTkButton(nav_frame, text="🔍  Rechercher", command=lambda: app._show_tool(app.search_wrapper), **btn_params).pack(fill="x", pady=2)
-    ctk.CTkButton(nav_frame, text="💰  Budget & Analyse", command=lambda: app._show_tool(app.budget_wrapper), **btn_params).pack(fill="x", pady=2)
+    ctk.CTkButton(nav_frame, text="📅  Agenda", command=lambda: app._show_tool(app.calendar_wrapper), **btn_params).pack(fill="x", pady=2)
+    ctk.CTkButton(nav_frame, text="�  Budget & Analyse", command=lambda: app._show_tool(app.budget_wrapper), **btn_params).pack(fill="x", pady=2)
     ctk.CTkButton(nav_frame, text="💸  Gestion des Frais", command=lambda: app._show_tool(app.expenses_wrapper), **btn_params).pack(fill="x", pady=2)
     ctk.CTkButton(nav_frame, text="📄  Attestation", command=lambda: app._show_tool(app.attestation_wrapper), **btn_params).pack(fill="x", pady=2)
 

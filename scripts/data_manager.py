@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 import time
 import shutil
@@ -625,3 +626,67 @@ def import_expenses_from_csv(file_path):
         return count, ""
     except Exception as e:
         return 0, str(e)
+
+# --- Gestion de l'Agenda (Notes/RDV) ---
+def _get_agenda_path(year):
+    """Retourne le chemin du fichier JSON de l'agenda pour une année."""
+    os.makedirs(config.AGENDA_DIR, exist_ok=True)
+    return os.path.join(config.AGENDA_DIR, f"agenda_{year}.json")
+
+def save_agenda_note(data):
+    """Enregistre une note dans l'agenda."""
+    try:
+        date_obj = datetime.strptime(data['date'], '%d/%m/%Y')
+        year = date_obj.year
+        filepath = _get_agenda_path(year)
+        
+        notes = []
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                notes = json.load(f)
+        
+        # Génération ID si absent
+        if 'id' not in data:
+            data['id'] = str(int(time.time() * 1000))
+            
+        # Mise à jour ou Ajout
+        existing_idx = next((i for i, n in enumerate(notes) if n['id'] == data['id']), None)
+        if existing_idx is not None:
+            notes[existing_idx] = data
+        else:
+            notes.append(data)
+            
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(notes, f, ensure_ascii=False, indent=4)
+        return True
+    except Exception as e:
+        print(f"Erreur sauvegarde note: {e}")
+        return False
+
+def load_agenda_notes(year):
+    """Charge les notes de l'agenda pour une année."""
+    filepath = _get_agenda_path(year)
+    if not os.path.exists(filepath):
+        return []
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def delete_agenda_note(note_id, year):
+    """Supprime une note."""
+    filepath = _get_agenda_path(year)
+    if not os.path.exists(filepath):
+        return False
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            notes = json.load(f)
+        
+        notes = [n for n in notes if n['id'] != note_id]
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(notes, f, ensure_ascii=False, indent=4)
+        return True
+    except Exception:
+        return False

@@ -97,6 +97,7 @@ class App(ctk.CTk):
         self.is_budget_tab_initialized = False
         self.is_expenses_tab_initialized = False
         self.is_attestation_tab_initialized = False
+        self.is_calendar_tab_initialized = False
 
         # --- Caches pour la performance ---
         self.data_cache = {}
@@ -126,6 +127,9 @@ class App(ctk.CTk):
 
         self.attestation_wrapper = self._create_tool_wrapper("Attestation", scrollable=True)
         self.attestation_tab = self.attestation_wrapper.content_frame
+
+        self.calendar_wrapper = self._create_tool_wrapper("Agenda", scrollable=False)
+        self.calendar_tab = self.calendar_wrapper.content_frame
 
         # --- Construction du Menu (via script externe) ---
         create_menu(self)
@@ -409,6 +413,10 @@ class App(ctk.CTk):
             from .attestation_tab import create_attestation_tab
             create_attestation_tab(self)
             self.is_attestation_tab_initialized = True
+        elif wrapper == self.calendar_wrapper and not self.is_calendar_tab_initialized:
+            from .calendar_tab import create_calendar_tab
+            create_calendar_tab(self)
+            self.is_calendar_tab_initialized = True
 
         wrapper.grid(row=0, column=0, sticky="nsew")
         
@@ -425,6 +433,9 @@ class App(ctk.CTk):
         elif wrapper == self.attestation_wrapper:
             from .attestation_tab import refresh_attestation_history
             refresh_attestation_history(self)
+        elif wrapper == self.calendar_wrapper:
+            from .calendar_tab import _refresh_calendar_view
+            _refresh_calendar_view(self)
 
     def _show_menu(self):
         self.new_invoice_wrapper.grid_forget()
@@ -432,6 +443,7 @@ class App(ctk.CTk):
         self.budget_wrapper.grid_forget()
         self.expenses_wrapper.grid_forget()
         self.attestation_wrapper.grid_forget()
+        self.calendar_wrapper.grid_forget()
         self.menu_frame.grid(row=0, column=0, sticky="nsew")
         
         # Force l'affichage immédiat du menu
