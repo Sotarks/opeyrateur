@@ -35,6 +35,29 @@ ACCOUNT_MAP = {
     "Matériel": "606300", "Fournitures": "606400"
 }
 
+# --- Cache pour les fichiers Excel ---
+_file_cache = {}
+
+def _load_excel_file_cached(path):
+    """Charge un fichier Excel en utilisant un cache basé sur la date de modification."""
+    global _file_cache
+    if not os.path.exists(path):
+        return None
+        
+    current_mtime = os.path.getmtime(path)
+    if path in _file_cache:
+        if _file_cache[path]['mtime'] == current_mtime:
+            return _file_cache[path]['data']
+            
+    try:
+        import pandas as pd
+        data = pd.read_excel(path, sheet_name=None)
+        _file_cache[path] = {'mtime': current_mtime, 'data': data}
+        return data
+    except Exception as e:
+        print(f"Erreur lecture fichier {path}: {e}")
+        return None
+
 def _get_excel_path(year):
     """Retourne le chemin du fichier Excel pour une année donnée."""
     year_dir = os.path.join(config.FACTURES_DIR, str(year))
@@ -42,12 +65,12 @@ def _get_excel_path(year):
 
 def get_yearly_invoice_count(year):
     """Compte le nombre total de factures pour une année à partir de son fichier Excel."""
-    import pandas as pd
     excel_path = _get_excel_path(year)
-    if not os.path.exists(excel_path):
+    all_sheets = _load_excel_file_cached(excel_path)
+    
+    if all_sheets is None:
         return 0
     try:
-        all_sheets = pd.read_excel(excel_path, sheet_name=None)
         return sum(len(df) for df in all_sheets.values())
     except Exception:
         return 0
@@ -88,10 +111,9 @@ def check_duplicate_invoice(data):
         year = invoice_date.year
         excel_path = _get_excel_path(year)
         
-        if not os.path.exists(excel_path):
+        all_sheets = _load_excel_file_cached(excel_path)
+        if all_sheets is None:
             return False
-            
-        all_sheets = pd.read_excel(excel_path, sheet_name=None)
         
         target_nom = str(data.get('Nom', '')).strip().upper()
         target_prenom = str(data.get('Prenom', '')).strip().lower()
@@ -239,22 +261,15 @@ def load_all_data():
     year_dirs = sorted(year_dirs, reverse=True)
     all_dfs = []
 
-    def load_year_file(year):
-        excel_path = _get_excel_path(year)
-        if not os.path.exists(excel_path):
-            return []
-        try:
-            yearly_sheets = pd.read_excel(excel_path, sheet_name=None)
-            return [df for df in yearly_sheets.values() if not df.empty]
-        except Exception as e:
-            print(f"Impossible de lire le fichier pour l'année {year}: {e}")
-            return []
+    # Utilisation de load_year_data qui utilise maintenant le cache
+    def safe_load_year(year):
+        return load_year_data(year)
 
     with ThreadPoolExecutor() as executor:
-        # map préserve l'ordre de year_dirs (années récentes en premier)
-        results = executor.map(load_year_file, year_dirs)
-        for dfs in results:
-            all_dfs.extend(dfs)
+        results = executor.map(safe_load_year, year_dirs)
+        for df in results:
+            if not df.empty:
+                all_dfs.append(df)
 
     if not all_dfs:
         return pd.DataFrame()
@@ -275,11 +290,12 @@ def load_year_data(year):
     """Charge les données pour une année spécifique."""
     import pandas as pd
     excel_path = _get_excel_path(year)
-    if not os.path.exists(excel_path):
+    
+    all_sheets = _load_excel_file_cached(excel_path)
+    if all_sheets is None:
         return pd.DataFrame()
     
     try:
-        all_sheets = pd.read_excel(excel_path, sheet_name=None)
         # Concatène toutes les feuilles (mois) qui contiennent des données
         df_list = [df for df in all_sheets.values() if not df.empty]
         if df_list:
@@ -418,11 +434,12 @@ def load_expenses(year):
     import pandas as pd
     excel_path = _get_expenses_excel_path(year)
     columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath", "CompteNum"]
-    if not os.path.exists(excel_path):
+    
+    all_sheets = _load_excel_file_cached(excel_path)
+    if all_sheets is None:
         return pd.DataFrame(columns=columns)
     
     try:
-        all_sheets = pd.read_excel(excel_path, sheet_name=None)
         df_list = []
         for df in all_sheets.values():
             if not df.empty:

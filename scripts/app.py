@@ -290,7 +290,7 @@ class App(ctk.CTk):
             name_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=2)
             
             # 3. Détails (Date - Prestation)
-            details_text = f"{row['Date']}  |  {row.get('Prestation', 'Consultation')}"
+            details_text = f"#{row.get('ID', '')}  |  {row['Date']}  |  {row.get('Prestation', 'Consultation')}"
             details_label = ctk.CTkLabel(invoice_frame, text=details_text, font=ctk.CTkFont(family="Montserrat", size=12), text_color="gray", anchor="w")
             details_label.grid(row=0, column=2, sticky="w", pady=2)
             
@@ -550,6 +550,31 @@ class App(ctk.CTk):
         # Pas besoin d'invalider le cache, on ré-applique juste les filtres
         self._apply_filters_and_search()
 
+    def _refresh_search_data(self):
+        """Invalide le cache et ré-applique les filtres de recherche (Asynchrone)."""
+        self.configure(cursor="watch")
+        self.search_refresh_progress.grid()
+        self.search_refresh_progress.start()
+        self._show_status_message("Rafraîchissement des données en cours...", 5000)
+        self._invalidate_data_cache()
+        
+        year = self.search_year_var.get()
+        year_to_load = year if year != "Toutes" else None
+
+        def _worker():
+            self._load_data_with_cache(year=year_to_load)
+            if self.winfo_exists():
+                self.after(0, _on_complete)
+
+        def _on_complete():
+            self.configure(cursor="")
+            self.search_refresh_progress.stop()
+            self.search_refresh_progress.grid_remove()
+            self._show_status_message("Données à jour.", 2000)
+            self._apply_filters_and_search()
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     def _on_search_year_change(self, selected_year):
         """Active ou désactive le filtre du mois en fonction de l'année."""
         if selected_year == "Toutes":
@@ -586,11 +611,17 @@ class App(ctk.CTk):
 
     def _open_calendar(self, entry_widget, make_readonly=True):
         """Ouvre une fenêtre Toplevel avec un calendrier pour sélectionner une date."""
+        # Protection contre les doubles clics (ouverture multiple)
+        if getattr(self, '_is_calendar_opening', False):
+            return
+
         from tkcalendar import Calendar
         if hasattr(self, '_calendar_toplevel') and self._calendar_toplevel is not None and self._calendar_toplevel.winfo_exists():
+            self._calendar_toplevel.lift()
             self._calendar_toplevel.focus()
             return
 
+        self._is_calendar_opening = True
         def set_date_and_close():
             entry_widget.configure(state="normal")
             entry_widget.delete(0, 'end')
@@ -633,89 +664,92 @@ class App(ctk.CTk):
 
         # Détermine la fenêtre parente (pour gérer les modales correctement)
         try:
-            parent = entry_widget.winfo_toplevel()
-        except Exception:
-            parent = self
+            try:
+                parent = entry_widget.winfo_toplevel()
+            except Exception:
+                parent = self
 
-        self._calendar_toplevel = ctk.CTkToplevel(parent)
-        self._calendar_toplevel.title("Choisir une date")
-        self._calendar_toplevel.transient(parent)
-        
-        # Si la fenêtre parente n'est pas l'application principale (ex: fenêtre modale),
-        # on doit forcer le grab_set pour garder le focus et éviter la fermeture immédiate.
-        if parent != self:
-            self._calendar_toplevel.grab_set()
+            self._calendar_toplevel = ctk.CTkToplevel(parent)
+            self._calendar_toplevel.title("Choisir une date")
+            self._calendar_toplevel.transient(parent)
             
-        self._calendar_toplevel.protocol("WM_DELETE_WINDOW", on_close)
-        self._calendar_toplevel.bind("<FocusOut>", on_focus_out)
+            # Si la fenêtre parente n'est pas l'application principale (ex: fenêtre modale),
+            # on doit forcer le grab_set pour garder le focus et éviter la fermeture immédiate.
+            if parent != self:
+                self._calendar_toplevel.grab_set()
+                
+            self._calendar_toplevel.protocol("WM_DELETE_WINDOW", on_close)
+            self._calendar_toplevel.bind("<FocusOut>", on_focus_out)
 
-        # --- Navigation Rapide (Année & Mois) ---
-        nav_frame = ctk.CTkFrame(self._calendar_toplevel, fg_color="transparent")
-        nav_frame.pack(pady=(10, 0), padx=10, fill="x")
-        
-        # Import pour les mois
-        from .data_manager import MONTHS_FR
-        
-        ctk.CTkLabel(nav_frame, text="Année :", font=("Montserrat", 12)).pack(side="left", padx=(10, 5))
-        
-        year_entry = ctk.CTkEntry(nav_frame, width=60, height=25)
-        year_entry.pack(side="left", padx=5)
-        
-        def update_calendar_year(event=None):
-            try:
-                new_year = int(year_entry.get())
+            # --- Navigation Rapide (Année & Mois) ---
+            nav_frame = ctk.CTkFrame(self._calendar_toplevel, fg_color="transparent")
+            nav_frame.pack(pady=(10, 0), padx=10, fill="x")
+            
+            # Import pour les mois
+            from .data_manager import MONTHS_FR
+            
+            ctk.CTkLabel(nav_frame, text="Année :", font=("Montserrat", 12)).pack(side="left", padx=(10, 5))
+            
+            year_entry = ctk.CTkEntry(nav_frame, width=60, height=25)
+            year_entry.pack(side="left", padx=5)
+            
+            def update_calendar_year(event=None):
                 try:
+                    new_year = int(year_entry.get())
+                    try:
+                        sel_date = datetime.strptime(cal.get_date(), '%d/%m/%Y')
+                        try: new_date = sel_date.replace(year=new_year)
+                        except ValueError: new_date = sel_date.replace(day=28, year=new_year)
+                    except: new_date = datetime(new_year, 1, 1)
+                    cal.selection_set(new_date)
+                    cal.see(new_date)
+                except ValueError: pass
+
+            year_entry.bind("<Return>", update_calendar_year)
+            ctk.CTkButton(nav_frame, text="OK", width=40, height=25, command=update_calendar_year).pack(side="left", padx=5)
+
+            # Sélection du Mois
+            ctk.CTkLabel(nav_frame, text="Mois :", font=("Montserrat", 12)).pack(side="left", padx=(10, 5))
+            
+            def update_calendar_month(choice):
+                try:
+                    month_idx = MONTHS_FR.index(choice) + 1
                     sel_date = datetime.strptime(cal.get_date(), '%d/%m/%Y')
-                    try: new_date = sel_date.replace(year=new_year)
-                    except ValueError: new_date = sel_date.replace(day=28, year=new_year)
-                except: new_date = datetime(new_year, 1, 1)
-                cal.selection_set(new_date)
-                cal.see(new_date)
-            except ValueError: pass
+                    import calendar
+                    last_day = calendar.monthrange(sel_date.year, month_idx)[1]
+                    new_day = min(sel_date.day, last_day)
+                    new_date = sel_date.replace(month=month_idx, day=new_day)
+                    cal.selection_set(new_date)
+                    cal.see(new_date)
+                except Exception: pass
 
-        year_entry.bind("<Return>", update_calendar_year)
-        ctk.CTkButton(nav_frame, text="OK", width=40, height=25, command=update_calendar_year).pack(side="left", padx=5)
+            month_menu = ctk.CTkOptionMenu(nav_frame, values=MONTHS_FR, width=110, height=25, command=update_calendar_month)
+            month_menu.pack(side="left", padx=5)
 
-        # Sélection du Mois
-        ctk.CTkLabel(nav_frame, text="Mois :", font=("Montserrat", 12)).pack(side="left", padx=(10, 5))
-        
-        def update_calendar_month(choice):
             try:
-                month_idx = MONTHS_FR.index(choice) + 1
-                sel_date = datetime.strptime(cal.get_date(), '%d/%m/%Y')
-                import calendar
-                last_day = calendar.monthrange(sel_date.year, month_idx)[1]
-                new_day = min(sel_date.day, last_day)
-                new_date = sel_date.replace(month=month_idx, day=new_day)
-                cal.selection_set(new_date)
-                cal.see(new_date)
-            except Exception: pass
+                current_date = datetime.strptime(entry_widget.get(), '%d/%m/%Y')
+                cal = Calendar(self._calendar_toplevel, selectmode='day', locale='fr_FR', date_pattern='dd/mm/yyyy',
+                            year=current_date.year, month=current_date.month, day=current_date.day)
+                year_entry.insert(0, str(current_date.year))
+                month_menu.set(MONTHS_FR[current_date.month - 1])
+            except (ValueError, TypeError):
+                cal = Calendar(self._calendar_toplevel, selectmode='day', locale='fr_FR', date_pattern='dd/mm/yyyy')
+                year_entry.insert(0, str(datetime.now().year))
+                month_menu.set(MONTHS_FR[datetime.now().month - 1])
 
-        month_menu = ctk.CTkOptionMenu(nav_frame, values=MONTHS_FR, width=110, height=25, command=update_calendar_month)
-        month_menu.pack(side="left", padx=5)
+            cal.pack(pady=10, padx=10)
 
-        try:
-            current_date = datetime.strptime(entry_widget.get(), '%d/%m/%Y')
-            cal = Calendar(self._calendar_toplevel, selectmode='day', locale='fr_FR', date_pattern='dd/mm/yyyy',
-                           year=current_date.year, month=current_date.month, day=current_date.day)
-            year_entry.insert(0, str(current_date.year))
-            month_menu.set(MONTHS_FR[current_date.month - 1])
-        except (ValueError, TypeError):
-            cal = Calendar(self._calendar_toplevel, selectmode='day', locale='fr_FR', date_pattern='dd/mm/yyyy')
-            year_entry.insert(0, str(datetime.now().year))
-            month_menu.set(MONTHS_FR[datetime.now().month - 1])
+            btn_frame = ctk.CTkFrame(self._calendar_toplevel, fg_color="transparent")
+            btn_frame.pack(pady=10, padx=10, fill="x")
 
-        cal.pack(pady=10, padx=10)
+            ctk.CTkButton(btn_frame, text="Aujourd'hui", command=set_today, fg_color="#3498db", width=100).pack(side="left", padx=5, expand=True)
+            ctk.CTkButton(btn_frame, text="Valider", command=set_date_and_close, width=100).pack(side="left", padx=5, expand=True)
 
-        btn_frame = ctk.CTkFrame(self._calendar_toplevel, fg_color="transparent")
-        btn_frame.pack(pady=10, padx=10, fill="x")
-
-        ctk.CTkButton(btn_frame, text="Aujourd'hui", command=set_today, fg_color="#3498db", width=100).pack(side="left", padx=5, expand=True)
-        ctk.CTkButton(btn_frame, text="Valider", command=set_date_and_close, width=100).pack(side="left", padx=5, expand=True)
-
-        self._calendar_toplevel.after(50, lambda: self._calendar_toplevel.geometry(f"+{parent.winfo_x() + (parent.winfo_width() - self._calendar_toplevel.winfo_width()) // 2}"
-                                                                                   f"+{parent.winfo_y() + (parent.winfo_height() - self._calendar_toplevel.winfo_height()) // 2}"))
-        self._calendar_toplevel.after(100, lambda: self._calendar_toplevel.focus_set())
+            self._calendar_toplevel.after(50, lambda: self._calendar_toplevel.geometry(f"+{parent.winfo_x() + (parent.winfo_width() - self._calendar_toplevel.winfo_width()) // 2}"
+                                                                                    f"+{parent.winfo_y() + (parent.winfo_height() - self._calendar_toplevel.winfo_height()) // 2}"))
+            self._calendar_toplevel.after(100, lambda: self._calendar_toplevel.focus_set())
+        finally:
+            self._is_calendar_opening = False
 
     def _generate_attestation_pdf(self):
         """Récupère les données du formulaire d'attestation et génère le PDF."""
@@ -794,6 +828,86 @@ class App(ctk.CTk):
                 refresh_expenses_list(self)
             
             self._update_dashboard_kpis()
+
+    def check_unpaid_invoices(self):
+        """Vérifie les factures impayées de plus de 30 jours."""
+        import pandas as pd
+        from . import settings_manager
+        from datetime import timedelta
+        
+        # Chargement des données (utilise le cache existant)
+        df = self._load_data_with_cache()
+        if df.empty or 'Methode_Paiement' not in df.columns: return
+
+        # Filtrage des impayés
+        unpaid = df[df['Methode_Paiement'] == 'Impayé'].copy()
+        if unpaid.empty: return
+
+        try:
+            # Conversion date et calcul du seuil (30 jours)
+            unpaid['DateObj'] = pd.to_datetime(unpaid['Date'], format='%d/%m/%Y', errors='coerce')
+            limit_date = datetime.now() - timedelta(days=30)
+            
+            # Factures antérieures à la date limite
+            late_invoices = unpaid[(unpaid['DateObj'].notna()) & (unpaid['DateObj'] < limit_date)]
+
+            if not late_invoices.empty:
+                ignored_ids = settings_manager.get_ignored_invoices()
+                new_late_invoices = late_invoices[~late_invoices['ID'].isin(ignored_ids)]
+
+                if not new_late_invoices.empty:
+                    count = len(new_late_invoices)
+                    total = new_late_invoices['Montant'].sum()
+                    
+                    # Affichage différé pour ne pas bloquer le chargement visuel
+                    self.after(1500, lambda: self._prompt_unpaid_invoices(count, total, new_late_invoices['ID'].tolist()))
+        except Exception as e:
+            print(f"Erreur vérification impayés: {e}")
+
+    def _prompt_unpaid_invoices(self, count, total, late_invoice_ids):
+        """Affiche une boîte de dialogue personnalisée pour les factures en retard."""
+        from . import settings_manager
+        
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Rappel de paiement")
+        dialog.geometry("450x250")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+        
+        dialog.after(10, lambda: dialog.geometry(f"+{self.winfo_x() + (self.winfo_width() - dialog.winfo_width()) // 2}"
+                                                 f"+{self.winfo_y() + (self.winfo_height() - dialog.winfo_height()) // 2}"))
+
+        msg = f"⚠️ ALERTE RETARDS\n\nVous avez {count} nouvelle(s) facture(s) impayée(s)\ndepuis plus de 30 jours.\n\nMontant total en attente : {total:.2f} €"
+        
+        ctk.CTkLabel(dialog, text=msg, justify="left", font=self.font_regular).pack(pady=20, padx=20, anchor="w")
+        
+        dont_notify_var = ctk.BooleanVar()
+        ctk.CTkCheckBox(dialog, text="Ne plus me notifier pour ces factures", variable=dont_notify_var, font=self.font_regular).pack(pady=10, padx=20, anchor="w")
+
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=20, padx=20, fill="x")
+        btn_frame.grid_columnconfigure((0, 1), weight=1)
+
+        def handle_yes():
+            dialog.destroy()
+            self._show_tool(self.search_wrapper)
+            self.search_year_var.set("Toutes")
+            self._on_search_year_change("Toutes")
+            self.search_status_var.set("Impayées")
+            self._apply_filters_and_search()
+
+        def handle_no():
+            if dont_notify_var.get():
+                ignored_ids = settings_manager.get_ignored_invoices()
+                ignored_ids.extend(late_invoice_ids)
+                settings_manager.save_ignored_invoices(list(set(ignored_ids)))
+            dialog.destroy()
+
+        ctk.CTkButton(btn_frame, text="Afficher la liste", command=handle_yes, height=40).grid(row=0, column=1, padx=(5,0), sticky="ew")
+        ctk.CTkButton(btn_frame, text="Plus tard", command=handle_no, fg_color="gray50", height=40).grid(row=0, column=0, padx=(0,5), sticky="ew")
+        
+        dialog.protocol("WM_DELETE_WINDOW", handle_no)
 
     def _animate_fade_in(self, alpha=0.0):
         """Gère l'animation de fondu à l'ouverture."""

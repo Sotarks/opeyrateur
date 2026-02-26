@@ -190,3 +190,25 @@ def set_last_recurring_run(date_str):
     with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
         parser.write(configfile)
     _invalidate_caches()
+
+def get_ignored_invoices():
+    """Récupère la liste des IDs de factures impayées ignorées."""
+    setup_default_settings()
+    parser = _get_parser()
+    try:
+        data_str = parser.get('App', 'ignored_invoices', fallback='[]')
+        return json.loads(data_str)
+    except (json.JSONDecodeError, configparser.Error):
+        return []
+
+def save_ignored_invoices(invoice_ids):
+    """Sauvegarde la liste des IDs de factures impayées ignorées."""
+    parser = _get_parser()
+    if not parser.has_section('App'):
+        parser.add_section('App')
+    # On s'assure que c'est bien une liste de strings
+    ids_as_strings = [str(id) for id in invoice_ids]
+    parser.set('App', 'ignored_invoices', json.dumps(ids_as_strings))
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+        parser.write(configfile)
+    _invalidate_caches()

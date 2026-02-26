@@ -7,7 +7,7 @@ from datetime import datetime
 import webbrowser
 
 from . import config
-from .data_manager import get_invoice_path, delete_invoice, MONTHS_FR, backup_database
+from .data_manager import get_invoice_path, delete_invoice, MONTHS_FR, backup_database, save_to_excel
 
 class InvoiceActions:
     def __init__(self, app):
@@ -38,63 +38,199 @@ class InvoiceActions:
 
     def open_modify_window(self, invoice_data):
         """Ouvre une fenêtre pour modifier le statut d'une facture."""
-        is_child = "enfant" in invoice_data.get("Prestation", "").lower() or "adolescent" in invoice_data.get("Prestation", "").lower()
-        height = 620 if is_child else 520
-
         win = ctk.CTkToplevel(self.app)
         win.title("Modifier la Facture")
-        win.geometry(f"400x{height}")
+        win.geometry("500x650")
+        win.resizable(True, True)
         win.transient(self.app)
         win.grab_set()
 
-        info_frame = ctk.CTkFrame(win, fg_color="transparent")
-        info_frame.pack(pady=10, padx=10, fill="x")
-        ctk.CTkLabel(info_frame, text=f"Facture: {invoice_data['ID']}", font=self.app.font_regular).pack(anchor="w")
-        ctk.CTkLabel(info_frame, text=f"Patient: {invoice_data.get('Prenom', '')} {invoice_data.get('Nom', '')}", font=self.app.font_regular).pack(anchor="w")
-        ctk.CTkLabel(info_frame, text=f"Date séance: {invoice_data.get('Date_Seance', 'N/A')}", font=self.app.font_regular).pack(anchor="w")
-        ctk.CTkLabel(info_frame, text=f"Statut: {invoice_data['Methode_Paiement']}", font=self.app.font_bold).pack(anchor="w", pady=(10,0))
+        win.grid_columnconfigure(0, weight=1)
+        win.grid_rowconfigure(0, weight=1)
 
-        update_frame = ctk.CTkFrame(win)
-        update_frame.pack(pady=10, padx=10, fill="x")
+        scroll_frame = ctk.CTkScrollableFrame(win, label_text=f"Modification de la facture #{invoice_data.get('ID', '')}", label_font=self.app.font_large)
+        scroll_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        scroll_frame.grid_columnconfigure(0, weight=1)
 
-        child_dob_entry = None
-        if is_child:
-            ctk.CTkLabel(update_frame, text="Date de naissance de l'enfant :").pack(pady=(10, 5))
-            child_dob_entry = ctk.CTkEntry(update_frame, placeholder_text="JJ/MM/AAAA")
-            child_dob_entry.pack(fill="x", padx=5)
-            child_dob_entry.insert(0, invoice_data.get('Naissance_Enfant', ''))
-            child_dob_entry.bind("<1>", lambda e: self.app._open_calendar(child_dob_entry, make_readonly=False))
+        # --- Carte 1: Informations Patient ---
+        patient_card = ctk.CTkFrame(scroll_frame)
+        patient_card.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        patient_card.grid_columnconfigure((0, 1), weight=1)
+        
+        ctk.CTkLabel(patient_card, text="Patient", font=self.app.font_bold).grid(row=0, column=0, columnspan=2, padx=15, pady=(10, 5), sticky="w")
+        
+        ctk.CTkLabel(patient_card, text="Prénom :").grid(row=1, column=0, padx=15, pady=(0, 5), sticky="w")
+        prenom_entry = ctk.CTkEntry(patient_card)
+        prenom_entry.grid(row=2, column=0, padx=15, pady=(0, 15), sticky="ew")
+        prenom_entry.insert(0, invoice_data.get('Prenom', ''))
 
-        ctk.CTkLabel(update_frame, text="Nouvelle date de séance :").pack(pady=(10, 5))
-        seance_date_entry = ctk.CTkEntry(update_frame, placeholder_text="JJ/MM/AAAA")
-        seance_date_entry.pack(fill="x", padx=5)
+        ctk.CTkLabel(patient_card, text="Nom :").grid(row=1, column=1, padx=15, pady=(0, 5), sticky="w")
+        nom_entry = ctk.CTkEntry(patient_card)
+        nom_entry.grid(row=2, column=1, padx=15, pady=(0, 15), sticky="ew")
+        nom_entry.insert(0, invoice_data.get('Nom', ''))
+
+        # --- Carte 2: Identification & Dates ---
+        dates_card = ctk.CTkFrame(scroll_frame)
+        dates_card.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        dates_card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(dates_card, text="Identification & Dates", font=self.app.font_bold).grid(row=0, column=0, padx=15, pady=(10, 5), sticky="w")
+
+        ctk.CTkLabel(dates_card, text="ID Facture :").grid(row=1, column=0, padx=15, pady=(0, 5), sticky="w")
+        id_entry = ctk.CTkEntry(dates_card)
+        id_entry.grid(row=2, column=0, padx=15, pady=(0, 10), sticky="ew")
+        id_entry.insert(0, invoice_data['ID'])
+
+        ctk.CTkLabel(dates_card, text="Date de facturation :").grid(row=3, column=0, padx=15, pady=(0, 5), sticky="w")
+        creation_date_entry = ctk.CTkEntry(dates_card)
+        creation_date_entry.grid(row=4, column=0, padx=15, pady=(0, 10), sticky="ew")
+        creation_date_entry.insert(0, invoice_data.get('Date', ''))
+        creation_date_entry.bind("<1>", lambda e: self.app._open_calendar(creation_date_entry, make_readonly=False))
+
+        ctk.CTkLabel(dates_card, text="Date de séance :").grid(row=5, column=0, padx=15, pady=(0, 5), sticky="w")
+        seance_date_entry = ctk.CTkEntry(dates_card)
+        seance_date_entry.grid(row=6, column=0, padx=15, pady=(0, 15), sticky="ew")
         seance_date_entry.insert(0, invoice_data.get('Date_Seance', ''))
         seance_date_entry.bind("<1>", lambda e: self.app._open_calendar(seance_date_entry, make_readonly=False))
 
-        ctk.CTkLabel(update_frame, text="Nouveau statut :").pack(pady=(10, 5))
-        new_status_var = ctk.CTkOptionMenu(update_frame, values=["Virement", "Espèce", "Chèque"])
-        new_status_var.pack(pady=5)
-        new_status_var.set("Virement")
+        # --- Carte 3: Informations Enfant (si applicable) ---
+        is_child = "enfant" in invoice_data.get("Prestation", "").lower() or "adolescent" in invoice_data.get("Prestation", "").lower()
+        child_dob_entry = None
+        if is_child:
+            child_card = ctk.CTkFrame(scroll_frame)
+            child_card.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+            child_card.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(child_card, text="Informations Enfant", font=self.app.font_bold).grid(row=0, column=0, padx=15, pady=(10, 5), sticky="w")
+            ctk.CTkLabel(child_card, text="Date de naissance de l'enfant :").grid(row=1, column=0, padx=15, pady=(0, 5), sticky="w")
+            child_dob_entry = ctk.CTkEntry(child_card)
+            child_dob_entry.grid(row=2, column=0, padx=15, pady=(0, 15), sticky="ew")
+            child_dob_entry.insert(0, invoice_data.get('Naissance_Enfant', ''))
+            child_dob_entry.bind("<1>", lambda e: self.app._open_calendar(child_dob_entry, make_readonly=False))
 
-        ctk.CTkLabel(update_frame, text="Date de paiement :").pack(pady=(10, 5))
-        payment_date_entry = ctk.CTkEntry(update_frame, placeholder_text="JJ/MM/AAAA")
-        payment_date_entry.pack(pady=5)
-        payment_date_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
+        # --- Carte 4: Statut du Paiement ---
+        payment_card = ctk.CTkFrame(scroll_frame)
+        payment_card.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        payment_card.grid_columnconfigure((0, 1), weight=1)
+        
+        ctk.CTkLabel(payment_card, text="Statut du Paiement", font=self.app.font_bold).grid(row=0, column=0, columnspan=2, padx=15, pady=(10, 5), sticky="w")
+        ctk.CTkLabel(payment_card, text=f"Statut actuel : {invoice_data['Methode_Paiement']}", font=self.app.font_regular).grid(row=1, column=0, columnspan=2, padx=15, pady=(0, 10), sticky="w")
+
+        payment_date_label = ctk.CTkLabel(payment_card, text="Date de paiement :")
+        payment_date_entry = ctk.CTkEntry(payment_card)
+        
+        def toggle_payment_date(status):
+            if status == "Impayé":
+                payment_date_label.grid_remove()
+                payment_date_entry.grid_remove()
+            else:
+                payment_date_label.grid(row=2, column=1, padx=15, pady=(0, 5), sticky="w")
+                payment_date_entry.grid(row=3, column=1, padx=15, pady=(0, 15), sticky="ew")
+
+        ctk.CTkLabel(payment_card, text="Nouveau statut :").grid(row=2, column=0, padx=15, pady=(0, 5), sticky="w")
+        new_status_var = ctk.CTkOptionMenu(payment_card, values=["Virement", "Espèce", "Chèque", "Impayé"], command=toggle_payment_date)
+        new_status_var.grid(row=3, column=0, padx=15, pady=(0, 15), sticky="ew")
+        new_status_var.set(invoice_data.get('Methode_Paiement', 'Virement'))
+
+        payment_date_to_show = invoice_data.get('Date_Paiement') or datetime.now().strftime("%d/%m/%Y")
+        payment_date_entry.insert(0, payment_date_to_show)
         payment_date_entry.bind("<1>", lambda e: self.app._open_calendar(payment_date_entry))
+        toggle_payment_date(new_status_var.get())
 
-        regen_pdf_var = ctk.CTkCheckBox(update_frame, text="Régénérer le PDF", font=self.app.font_regular)
-        regen_pdf_var.pack(pady=10)
+        # --- Option de régénération ---
+        regen_pdf_var = ctk.CTkCheckBox(scroll_frame, text="Régénérer le PDF (recommandé si des informations ont changé)", font=self.app.font_regular)
+        regen_pdf_var.grid(row=4, column=0, padx=15, pady=10, sticky="w")
         regen_pdf_var.select()
 
-        def on_update():
+        def on_update(open_after=False):
             dob = child_dob_entry.get() if child_dob_entry else None
-            self._update_invoice_status(invoice_data, new_status_var.get(), payment_date_entry.get(), seance_date_entry.get(), dob, regen_pdf_var.get(), win)
+            new_nom = nom_entry.get().strip()
+            new_prenom = prenom_entry.get().strip()
+            new_id = id_entry.get().strip()
+            new_creation_date = creation_date_entry.get().strip()
+            
+            status = new_status_var.get()
+            payment_date = payment_date_entry.get() if status != 'Impayé' else ''
+            
+            self._update_invoice_status(invoice_data, status, payment_date, seance_date_entry.get(), dob, regen_pdf_var.get(), win, new_nom, new_prenom, new_id, new_creation_date, open_pdf_after=open_after)
 
-        ctk.CTkButton(win, text="Mettre à jour", font=self.app.font_button, command=on_update).pack(pady=20)
+        # --- Boutons d'action en bas ---
+        btn_frame = ctk.CTkFrame(win)
+        btn_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
+        btn_frame.grid_columnconfigure((0, 1), weight=1)
+        
+        ctk.CTkButton(btn_frame, text="Sauvegarder et Fermer", font=self.app.font_button, command=lambda: on_update(False), height=40).grid(row=0, column=0, padx=(0, 5), sticky="ew")
+        ctk.CTkButton(btn_frame, text="Sauvegarder et Ouvrir", font=self.app.font_button, command=lambda: on_update(True), height=40).grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
-    def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, new_child_dob, regen_pdf, window):
+    def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, new_child_dob, regen_pdf, window, new_nom=None, new_prenom=None, new_id=None, new_creation_date=None, open_pdf_after=False):
         try:
             import pandas as pd
+            
+            # Gestion du changement de date de création (nécessite suppression/recréation pour gérer les fichiers Excel annuels)
+            old_date = invoice_data.get('Date')
+            if new_creation_date and new_creation_date != old_date:
+                new_data = invoice_data.copy()
+                new_data.update({
+                    'Date': new_creation_date,
+                    'Methode_Paiement': new_status,
+                    'Date_Paiement': new_payment_date,
+                    'Date_Seance': new_seance_date,
+                    'Nom': new_nom if new_nom else invoice_data.get('Nom'),
+                    'Prenom': new_prenom if new_prenom else invoice_data.get('Prenom'),
+                })
+                if new_child_dob: new_data['Naissance_Enfant'] = new_child_dob
+                
+                # --- Mise à jour intelligente de l'ID ---
+                new_date_obj = datetime.strptime(new_creation_date, '%d/%m/%Y')
+                new_date_prefix = new_date_obj.strftime('%Y%m%d')
+                current_id_input = new_id if new_id else invoice_data.get('ID')
+
+                # Si l'ID actuel ne correspond pas à la nouvelle date, on le régénère
+                if not current_id_input.startswith(new_date_prefix):
+                    # Gestion du SequenceID
+                    old_date_obj = datetime.strptime(old_date, '%d/%m/%Y')
+                    
+                    if old_date_obj.year != new_date_obj.year:
+                        # Changement d'année : nouvelle séquence obligatoire
+                        from .data_manager import get_next_sequence_id
+                        seq_int = get_next_sequence_id(new_date_obj.year)
+                        seq_str = f"{seq_int:04d}"
+                    else:
+                        # Même année : on conserve la séquence existante
+                        seq_val = invoice_data.get('SequenceID')
+                        if not seq_val or str(seq_val) == 'nan':
+                            seq_val = current_id_input.split('-')[-1] if '-' in current_id_input else "0001"
+                        try:
+                            seq_str = f"{int(float(seq_val)):04d}"
+                        except:
+                            seq_str = str(seq_val)
+
+                    new_data['ID'] = f"{new_date_prefix}-{seq_str}"
+                    new_data['SequenceID'] = seq_str
+                else:
+                    # L'utilisateur a mis à jour l'ID manuellement ou il correspond déjà
+                    new_data['ID'] = current_id_input
+                    if '-' in current_id_input:
+                         new_data['SequenceID'] = current_id_input.split('-')[-1]
+
+                if delete_invoice(invoice_data):
+                    save_to_excel(new_data)
+                    
+                    if regen_pdf:
+                        self._regenerate_pdf_and_cleanup(new_data, invoice_data)
+
+                    self.app._invalidate_data_cache()
+                    window.destroy()
+                    self.app._apply_filters_and_search()
+                    if open_pdf_after:
+                        self.view_invoice_pdf(new_data)
+                    else:
+                        messagebox.showinfo("Succès", "Facture mise à jour (Date modifiée).")
+                    return
+                else:
+                    messagebox.showerror("Erreur", "Impossible de supprimer l'ancienne facture pour la mise à jour.")
+                    return
+
+            # Mise à jour classique (même date de création)
             invoice_date = datetime.strptime(invoice_data.get('Date'), '%d/%m/%Y')
             year = invoice_date.year
             month_name = MONTHS_FR[invoice_date.month - 1]
@@ -111,26 +247,52 @@ class InvoiceActions:
             sheet_df.loc[idx, 'Date_Paiement'] = new_payment_date
             sheet_df.loc[idx, 'Date_Seance'] = new_seance_date
             if new_child_dob: sheet_df.loc[idx, 'Naissance_Enfant'] = new_child_dob
+            if new_nom: sheet_df.loc[idx, 'Nom'] = new_nom
+            if new_prenom: sheet_df.loc[idx, 'Prenom'] = new_prenom
+            
+            if new_id and new_id != invoice_data['ID']:
+                sheet_df.loc[idx, 'ID'] = new_id
+                # Mise à jour intelligente du SequenceID si le format est standard (YYYYMMDD-XXXX)
+                if '-' in new_id:
+                    parts = new_id.split('-')
+                    if len(parts) >= 2 and parts[-1].isdigit():
+                        sheet_df.loc[idx, 'SequenceID'] = parts[-1]
             
             all_sheets[month_name] = sheet_df
             with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
                 for sheet_name, df in all_sheets.items(): df.to_excel(writer, sheet_name=sheet_name, index=False)
 
+            updated_data = sheet_df.loc[idx].to_dict()
+
             if regen_pdf:
-                updated_data = sheet_df.loc[idx].to_dict()
-                clean_data = {k: v for k, v in updated_data.items() if pd.notna(v)}
-                if 'Membres_Famille' in clean_data and isinstance(clean_data.get('Membres_Famille'), str):
-                    try: clean_data['Membres_Famille'] = ast.literal_eval(clean_data['Membres_Famille'])
-                    except: del clean_data['Membres_Famille']
-                from .pdf_generator import generate_pdf
-                generate_pdf(clean_data, is_duplicate=True)
+                self._regenerate_pdf_and_cleanup(updated_data, invoice_data)
 
             self.app._invalidate_data_cache()
             window.destroy()
             self.app._apply_filters_and_search()
-            messagebox.showinfo("Succès", "Facture mise à jour.")
+            
+            if open_pdf_after:
+                self.view_invoice_pdf(updated_data)
+            else:
+                messagebox.showinfo("Succès", "Facture mise à jour.")
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur : {e}")
+
+    def _regenerate_pdf_and_cleanup(self, new_data, old_data):
+        """Génère le nouveau PDF et supprime l'ancien si le chemin a changé."""
+        import pandas as pd
+        clean_data = {k: v for k, v in new_data.items() if pd.notna(v)}
+        if 'Membres_Famille' in clean_data and isinstance(clean_data.get('Membres_Famille'), str):
+            try: clean_data['Membres_Famille'] = ast.literal_eval(clean_data['Membres_Famille'])
+            except: del clean_data['Membres_Famille']
+            
+        from .pdf_generator import generate_pdf
+        new_path = generate_pdf(clean_data, is_duplicate=False)
+        
+        old_path = get_invoice_path(old_data)
+        if os.path.abspath(old_path) != os.path.abspath(new_path) and os.path.exists(old_path):
+            try: os.remove(old_path)
+            except Exception as e: print(f"Erreur suppression ancien PDF: {e}")
 
     def show_success_dialog(self, pdf_path, invoice_data=None):
         """Affiche une boîte de dialogue de succès."""

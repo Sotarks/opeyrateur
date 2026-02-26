@@ -106,6 +106,7 @@ class LoginUI:
             self.loading_window.destroy()
             
         self.app.check_automatic_expenses()
+        self.app.check_unpaid_invoices()
 
     def _on_numpad_press(self, digit):
         self.app.pin_entry.insert(ctk.END, digit)

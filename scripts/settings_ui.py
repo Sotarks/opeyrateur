@@ -1,12 +1,15 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import os
+import sys
 import threading
 import queue
 import time
 import random
 from datetime import datetime
 import ast
+import shutil
+import zipfile
 
 from . import config
 from . import settings_manager
@@ -130,6 +133,38 @@ class SettingsUI:
     def _build_data_settings(self, parent):
         ctk.CTkButton(parent, text="Ouvrir le dossier de l'application", font=self.app.font_button, command=self._open_app_directory, height=40).pack(fill="x", padx=20, pady=5)
 
+        ctk.CTkLabel(parent, text="Sauvegardes & Exports (ZIP)", font=self.app.font_bold, text_color="#3498db").pack(anchor="w", padx=20, pady=(20, 10))
+
+        # --- Période de sauvegarde ---
+        period_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        period_frame.pack(fill="x", padx=20, pady=(0, 10))
+        ctk.CTkLabel(period_frame, text="Période à sauvegarder :").pack(side="left")
+
+        from .data_manager import get_available_years, MONTHS_FR
+        years = ["Toutes"] + get_available_years()
+        self.backup_year_var = ctk.StringVar(value="Toutes")
+        year_menu = ctk.CTkOptionMenu(period_frame, variable=self.backup_year_var, values=years, width=100)
+        year_menu.pack(side="left", padx=5)
+
+        months = ["Tous"] + MONTHS_FR
+        self.backup_month_var = ctk.StringVar(value="Tous")
+        month_menu = ctk.CTkOptionMenu(period_frame, variable=self.backup_month_var, values=months, width=120)
+        month_menu.pack(side="left", padx=5)
+
+        # --- Boutons d'export ---
+        ctk.CTkButton(parent, text="📦 Sauvegarde Complète (Tout)", font=self.app.font_button, command=lambda: self._create_zip_backup("all"), height=40, fg_color="#2ecc71", hover_color="#27ae60").pack(fill="x", padx=20, pady=5)
+
+        grid_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        grid_frame.pack(fill="x", padx=20, pady=5)
+
+        ctk.CTkButton(grid_frame, text="Factures", font=self.app.font_button, command=lambda: self._create_zip_backup("factures"), height=35).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(grid_frame, text="Frais", font=self.app.font_button, command=lambda: self._create_zip_backup("frais"), height=35).pack(side="left", fill="x", expand=True, padx=(5, 5))
+        ctk.CTkButton(grid_frame, text="Budget/Attest.", font=self.app.font_button, command=lambda: self._create_zip_backup("others"), height=35).pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+        # --- Restauration ---
+        ctk.CTkLabel(parent, text="Restauration", font=self.app.font_bold, text_color="#e67e22").pack(anchor="w", padx=20, pady=(20, 10))
+        ctk.CTkButton(parent, text="📥 Importer une sauvegarde ZIP", font=self.app.font_button, command=self._import_zip_backup, height=40, fg_color="#e67e22", hover_color="#d35400").pack(fill="x", padx=20, pady=5)
+
     def _build_maintenance_settings(self, parent):
         ctk.CTkLabel(parent, text="Outils de correction en cas de problème d'affichage ou de données.", font=self.app.font_regular, text_color="gray").pack(anchor="w", padx=20, pady=(0, 10))
         
@@ -164,6 +199,169 @@ class SettingsUI:
         ctk.CTkButton(danger_grid, text="Supprimer Frais", command=self._delete_expenses, **danger_style).pack(side="left", fill="x", expand=True, padx=5)
         
         ctk.CTkButton(parent, text="Supprimer Budgets", command=self._delete_budgets, **danger_style).pack(fill="x", padx=20, pady=5)
+
+    def _create_zip_backup(self, target):
+        """Crée une archive ZIP des données demandées, en tenant compte de la période sélectionnée."""
+        import pandas as pd
+        from io import BytesIO
+
+        selected_year = self.backup_year_var.get()
+        selected_month = self.backup_month_var.get()
+
+        # Définition des dossiers à inclure selon la cible
+        dirs_to_zip = {}
+        date_str = datetime.now().strftime('%Y-%m-%d')
+
+        period_str = ""
+        if selected_year != "Toutes":
+            period_str += f"_{selected_year}"
+            if selected_month != "Tous":
+                period_str += f"_{selected_month[:3]}"
+
+        if target == "all":
+            dirs_to_zip = {
+                "factures": config.FACTURES_DIR,
+                "frais": config.FRAIS_DIR,
+                "budget": config.BUDGET_DIR,
+                "attestations": config.ATTESTATIONS_DIR,
+                "settings.ini": os.path.join(config.BASE_DIR, "settings.ini")
+            }
+            default_name = f"Backup_Complet{period_str}_{date_str}"
+        elif target == "factures":
+            dirs_to_zip = {"factures": config.FACTURES_DIR}
+            default_name = f"Backup_Factures{period_str}_{date_str}"
+        elif target == "frais":
+            dirs_to_zip = {"frais": config.FRAIS_DIR}
+            default_name = f"Backup_Frais{period_str}_{date_str}"
+        elif target == "others":
+            dirs_to_zip = {
+                "budget": config.BUDGET_DIR,
+                "attestations": config.ATTESTATIONS_DIR
+            }
+            default_name = f"Backup_Budget_Attestations_{date_str}"
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".zip",
+            filetypes=[("Fichier ZIP", "*.zip")],
+            initialfile=default_name,
+            title="Enregistrer la sauvegarde ZIP"
+        )
+
+        if not filepath: return
+
+        try:
+            with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for arcname, path in dirs_to_zip.items():
+                    if not os.path.exists(path):
+                        continue
+
+                    if os.path.isfile(path): # ex: settings.ini
+                        if selected_year == "Toutes": # Inclure seulement dans une sauvegarde complète
+                            zipf.write(path, arcname)
+                        continue
+
+                    # Gestion des dossiers
+                    if selected_year == "Toutes":
+                        for root, _, files in os.walk(path):
+                            for file in files:
+                                abs_path = os.path.join(root, file)
+                                rel_path = os.path.relpath(abs_path, path)
+                                zipf.write(abs_path, os.path.join(arcname, rel_path))
+                    else: # Une année est sélectionnée
+                        year_path = os.path.join(path, selected_year)
+                        if not os.path.isdir(year_path):
+                            continue
+
+                        if selected_month == "Tous":
+                            for root, _, files in os.walk(year_path):
+                                for file in files:
+                                    abs_path = os.path.join(root, file)
+                                    rel_path = os.path.relpath(abs_path, path)
+                                    zipf.write(abs_path, rel_path)
+                        else: # Un mois est aussi sélectionné
+                            from .data_manager import MONTHS_FR
+                            month_index = MONTHS_FR.index(selected_month) + 1
+
+                            # 1. Filtre les sous-dossiers (PDFs, justificatifs)
+                            for root, _, files in os.walk(year_path):
+                                dir_name = os.path.basename(root)
+                                try:
+                                    date_in_dir = datetime.strptime(dir_name, '%Y-%m-%d')
+                                    if date_in_dir.month == month_index:
+                                        for file in files:
+                                            abs_path = os.path.join(root, file)
+                                            rel_path = os.path.relpath(abs_path, path)
+                                            zipf.write(abs_path, rel_path)
+                                except ValueError:
+                                    pass # Pas un dossier date, on continue
+
+                            # 2. Filtre le fichier Excel
+                            excel_filename = ""
+                            if arcname == "factures": excel_filename = f"factures_{selected_year}.xlsx"
+                            elif arcname == "frais": excel_filename = f"frais_{selected_year}.xlsx"
+
+                            if excel_filename:
+                                excel_path = os.path.join(year_path, excel_filename)
+                                if os.path.exists(excel_path):
+                                    try:
+                                        all_sheets = pd.read_excel(excel_path, sheet_name=None)
+                                        if selected_month in all_sheets:
+                                            month_df = all_sheets[selected_month]
+                                            output = BytesIO()
+                                            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                                month_df.to_excel(writer, sheet_name=selected_month, index=False)
+                                            zip_excel_path = os.path.join(arcname, selected_year, excel_filename)
+                                            zipf.writestr(zip_excel_path, output.getvalue())
+                                    except Exception:
+                                        pass # Ignore les erreurs de traitement Excel
+
+            messagebox.showinfo("Succès", f"Sauvegarde créée avec succès :\n{filepath}")
+            try: os.startfile(os.path.dirname(filepath))
+            except: pass
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de créer le ZIP :\n{e}")
+
+    def _import_zip_backup(self):
+        """Restaure les données depuis une archive ZIP."""
+        filepath = filedialog.askopenfilename(
+            defaultextension=".zip",
+            filetypes=[("Fichier ZIP", "*.zip")],
+            title="Sélectionner une sauvegarde ZIP à restaurer"
+        )
+        if not filepath:
+            return
+
+        if not messagebox.askyesno("Confirmation de restauration", "ATTENTION : Cette action va écraser toutes les données actuelles (factures, frais, réglages...) et les remplacer par le contenu de la sauvegarde.\n\nÊtes-vous sûr de vouloir continuer ?"):
+            return
+
+        try:
+            # 1. Supprime les données actuelles
+            dirs_to_delete = {
+                "factures": config.FACTURES_DIR,
+                "frais": config.FRAIS_DIR,
+                "budget": config.BUDGET_DIR,
+                "attestations": config.ATTESTATIONS_DIR
+            }
+            for name, path in dirs_to_delete.items():
+                if os.path.exists(path):
+                    shutil.rmtree(path)
+            
+            settings_file = os.path.join(config.BASE_DIR, "settings.ini")
+            if os.path.exists(settings_file):
+                os.remove(settings_file)
+
+            # 2. Extrait le ZIP
+            with zipfile.ZipFile(filepath, 'r') as zipf:
+                zipf.extractall(config.BASE_DIR)
+            
+            # 3. Invalide les caches et affiche un message
+            settings_manager._invalidate_caches()
+            self.app._invalidate_data_cache()
+            
+            messagebox.showinfo("Restauration terminée", "Les données ont été restaurées avec succès.\n\nVeuillez redémarrer l'application pour que tous les changements soient pris en compte.")
+            
+        except Exception as e:
+            messagebox.showerror("Erreur de restauration", f"Une erreur est survenue lors de la restauration :\n{e}")
 
     def _change_zoom(self, new_zoom):
         settings_manager.save_ui_zoom(new_zoom)

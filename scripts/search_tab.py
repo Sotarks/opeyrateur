@@ -86,7 +86,18 @@ def create_search_tab(app):
     main_content.grid_columnconfigure(0, weight=1)
     main_content.grid_rowconfigure(1, weight=1)
 
-    ctk.CTkLabel(main_content, text="Résultats de la recherche", font=app.font_title, text_color="#3498db").grid(row=0, column=0, sticky="w", pady=(0, 15))
+    # Titre et bouton de rafraîchissement
+    title_frame = ctk.CTkFrame(main_content, fg_color="transparent")
+    title_frame.grid(row=0, column=0, sticky="ew", pady=(0, 15))
+    title_frame.grid_columnconfigure(0, weight=1)
+
+    ctk.CTkLabel(title_frame, text="Résultats de la recherche", font=app.font_title, text_color="#3498db").grid(row=0, column=0, sticky="w")
+    ctk.CTkButton(title_frame, text="Rafraîchir 🔄", command=app._refresh_search_data, fg_color="transparent", border_width=1, text_color=("gray10", "gray90")).grid(row=0, column=1, sticky="e")
+
+    # Barre de progression pour le rafraîchissement
+    app.search_refresh_progress = ctk.CTkProgressBar(title_frame, mode='indeterminate', height=4)
+    app.search_refresh_progress.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+    app.search_refresh_progress.grid_remove() # Cachée par défaut
 
     # --- Cadre des résultats ---
     app.results_frame = ctk.CTkScrollableFrame(main_content, label_text="", corner_radius=15, fg_color=("white", "gray20"))
