@@ -6,3 +6,5 @@ frais
 build
 scripts/__pycache__
 budget
+log.txt
+settings.ini

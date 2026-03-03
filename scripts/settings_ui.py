@@ -177,6 +177,9 @@ class SettingsUI:
         ctk.CTkLabel(parent, text="Organisation des fichiers", font=self.app.font_bold, text_color="#3498db").pack(anchor="w", padx=20, pady=(20, 10))
         ctk.CTkButton(parent, text="🗂️ Reclasser les factures (Année > Mois > Jour)", font=self.app.font_button, command=self._reclassify_invoices, height=40).pack(fill="x", padx=20, pady=5)
 
+        ctk.CTkLabel(parent, text="Diagnostic", font=self.app.font_bold, text_color="#3498db").pack(anchor="w", padx=20, pady=(20, 10))
+        ctk.CTkButton(parent, text="📄 Ouvrir le fichier de log (log.txt)", font=self.app.font_button, command=self._open_log_file, height=40).pack(fill="x", padx=20, pady=5)
+
     def _build_debug_settings(self, parent, window):
         debug_ctrl = ctk.CTkFrame(parent, fg_color="transparent")
         debug_ctrl.pack(fill="x", padx=20, pady=(0, 10))
@@ -376,6 +379,16 @@ class SettingsUI:
             os.startfile(config.BASE_DIR)
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'ouvrir le dossier de l'application:\n{e}")
+
+    def _open_log_file(self):
+        log_path = os.path.join(config.BASE_DIR, "log.txt")
+        try:
+            if os.path.exists(log_path):
+                os.startfile(log_path)
+            else:
+                messagebox.showinfo("Information", "Le fichier log.txt n'a pas encore été créé.\nIl sera généré au prochain démarrage ou à la prochaine erreur.")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible d'ouvrir le fichier log:\n{e}")
 
     def _open_pdf_settings_window(self):
         pdf_info = settings_manager.get_pdf_info()

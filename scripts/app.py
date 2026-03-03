@@ -8,6 +8,8 @@ from tkinter import filedialog
 from PIL import Image
 import threading
 import warnings
+import sys
+import logging
 
 # Ignorer l'avertissement de conflit entre PyFPDF et fpdf2
 warnings.filterwarnings("ignore", category=UserWarning, module="fpdf")
@@ -24,9 +26,33 @@ from .settings_ui import SettingsUI
 from .invoice_actions import InvoiceActions
 from .invoice_manager import InvoiceManager
 
+# --- Configuration du Logging ---
+LOG_FILE = os.path.join(config.BASE_DIR, "log.txt")
+
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filemode='a'
+)
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logging.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        
+        # Capture des erreurs Tkinter (interface graphique)
+        self.report_callback_exception = self._handle_tk_exception
+        
+        logging.info("==========================================")
+        logging.info("Application started")
 
         # --- Fenêtre de chargement (Splash Screen) ---
         self.overrideredirect(True) # Masque la barre de titre
@@ -198,8 +224,14 @@ class App(ctk.CTk):
         # Sauvegarde de la position à la fermeture
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+    def _handle_tk_exception(self, exc, val, tb):
+        """Gère les exceptions survenues dans les callbacks Tkinter."""
+        logging.error("Tkinter exception", exc_info=(exc, val, tb))
+        messagebox.showerror("Erreur", f"Une erreur est survenue :\n{val}\n\nConsultez log.txt pour plus de détails.")
+
     def on_closing(self):
         """Sauvegarde la géométrie et ferme l'application."""
+        logging.info("Application closed by user")
         settings_manager.save_window_geometry(self.geometry())
         self.destroy()
 

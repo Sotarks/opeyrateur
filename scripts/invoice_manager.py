@@ -7,6 +7,7 @@ class InvoiceManager:
     def __init__(self, app):
         self.app = app
         self.family_member_entries = []
+        self._patient_suggestion_job = None # Pour dé-bouncer la recherche
 
     def add_family_member(self):
         """Ajoute une ligne de saisie pour un membre de la famille."""
@@ -79,18 +80,108 @@ class InvoiceManager:
         is_couple_session = "couple" in prestation_choisie.lower()
         
         # Masque les cadres optionnels
-        self.app.child_info_frame.grid_forget()
-        self.app.family_frame.grid_forget()
-        self.app.couple_frame.grid_forget()
-        self.app.p1_civility_frame.grid_forget()
+        for w in [self.app.child_info_frame, self.app.family_frame, self.app.couple_frame, self.app.p1_civility_frame]:
+            w.grid_forget()
 
         if is_child_session:
-            self.app.child_info_frame.grid(row=2, column=0, padx=0, pady=10, sticky="ew")
-            self.app.p1_civility_frame.grid(row=1, column=0, sticky='w', padx=(10, 5))
+            self.app.child_info_frame.grid(row=5, column=0, padx=0, pady=10, sticky="ew")
+            self.app.p1_civility_frame.grid(row=1, column=0, sticky='w', padx=(10, 5), in_=self.app.client_frame)
         elif is_family_session:
-            self.app.family_frame.grid(row=2, column=0, padx=0, pady=10, sticky="ew")
+            self.app.family_frame.grid(row=5, column=0, padx=0, pady=10, sticky="ew")
         elif is_couple_session:
-            self.app.couple_frame.grid(row=2, column=0, padx=0, pady=10, sticky="ew")
+            self.app.couple_frame.grid(row=5, column=0, padx=0, pady=10, sticky="ew")
+
+    def _on_patient_search_change(self):
+        """Filtre et affiche les suggestions de patients en fonction de la saisie."""
+        if self._patient_suggestion_job:
+            self.app.after_cancel(self._patient_suggestion_job)
+        self._patient_suggestion_job = self.app.after(250, self._perform_patient_search)
+
+    def _perform_patient_search(self):
+        """Exécute la recherche de patients et met à jour l'interface."""
+        import pandas as pd
+
+        query_prenom = self.app.prenom.get().lower().strip()
+        query_nom = self.app.nom.get().lower().strip()
+
+        if len(query_prenom) < 2 and len(query_nom) < 2:
+            self.app.patient_suggestion_frame.grid_forget()
+            return
+
+        df = self.app._load_data_with_cache()
+        if df.empty: return
+
+        # Crée une liste unique de patients, en privilégiant les infos les plus récentes
+        df['DateObj'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
+        patients_df = df.sort_values('DateObj', ascending=False).drop_duplicates(subset=['Nom', 'Prenom'])
+        
+        mask = pd.Series([True] * len(patients_df))
+        if query_prenom:
+            mask &= patients_df['Prenom'].str.lower().fillna('').str.startswith(query_prenom)
+        if query_nom:
+            mask &= patients_df['Nom'].str.lower().fillna('').str.startswith(query_nom)
+
+        results = patients_df[mask].head(5)
+
+        for widget in self.app.patient_suggestion_frame.winfo_children():
+            widget.destroy()
+
+        if results.empty:
+            self.app.patient_suggestion_frame.grid_forget()
+            return
+
+        # Place la boîte de suggestions juste sous le cadre du client
+        self.app.patient_suggestion_frame.grid(row=4, column=0, sticky="ew", padx=20, pady=(0, 10), in_=self.app.new_invoice_left_panel)
+        
+        for _, patient_data in results.iterrows():
+            patient_name = f"{patient_data['Prenom']} {patient_data['Nom']}"
+            if pd.notna(patient_data.get('Nom_Enfant')):
+                patient_name += f" (Enfant: {patient_data['Nom_Enfant']})"
+            
+            btn = ctk.CTkButton(
+                self.app.patient_suggestion_frame, text=patient_name, anchor="w", fg_color="transparent",
+                hover_color=("gray90", "gray30"), command=lambda p=patient_data.to_dict(): self._select_patient(p)
+            )
+            btn.pack(fill="x", padx=5, pady=2)
+            btn.bind("<FocusOut>", lambda e: self._hide_suggestions_on_focus_out())
+
+    def _select_patient(self, patient_data):
+        """Remplit le formulaire avec les données du patient sélectionné."""
+        import pandas as pd
+        self.reset_form(confirm=False)
+
+        self.app.prenom.insert(0, patient_data.get('Prenom', ''))
+        self.app.nom.insert(0, patient_data.get('Nom', ''))
+        self.app.adresse.insert(0, patient_data.get('Adresse', ''))
+
+        prestation = patient_data.get('Prestation')
+        if prestation and prestation in self.app.prestations_prix:
+            self.app.prestation.set(prestation)
+            self.update_form(prestation)
+
+        if pd.notna(patient_data.get('Nom_Enfant')):
+            self.app.enfant_nom.insert(0, patient_data.get('Nom_Enfant', ''))
+            self.app.enfant_dob.configure(state="normal")
+            self.app.enfant_dob.insert(0, patient_data.get('Naissance_Enfant', ''))
+            self.app.enfant_dob.configure(state="readonly")
+            if pd.notna(patient_data.get('Prenom2')):
+                 self.app.prenom2.insert(0, patient_data.get('Prenom2', ''))
+                 self.app.nom2.insert(0, patient_data.get('Nom2', ''))
+
+        self.app.patient_suggestion_frame.grid_forget()
+        self.app.payment_method.focus()
+
+    def _hide_suggestions_on_focus_out(self):
+        """Masque les suggestions après un court délai pour permettre le clic."""
+        def check_focus():
+            if not self.app.winfo_exists(): return
+            focused_widget = self.app.focus_get()
+            parent = focused_widget
+            while parent:
+                if parent == self.app.patient_suggestion_frame: return
+                parent = parent.master if hasattr(parent, 'master') else None
+            self.app.patient_suggestion_frame.grid_forget()
+        self.app.after(150, check_focus)
 
     def valider(self):
         """Valide le formulaire, sauvegarde les données et génère le PDF."""
@@ -191,33 +282,19 @@ class InvoiceManager:
             pdf_file = generate_pdf(data)
             self.app.invoice_actions.show_success_dialog(pdf_file, data)
             
-            # Reset form
-            self.app.nom.delete(0, 'end')
-            self.app.prenom.delete(0, 'end')
-            self.app.adresse.delete(0, 'end')
-            if is_child_session:
-                self.app.enfant_nom.delete(0, 'end')
-                self.app.enfant_dob.delete(0, 'end')
-                self.app.prenom2.delete(0, 'end')
-                self.app.nom2.delete(0, 'end')
-            elif is_family_session:
-                for widget in self.app.family_members_container.winfo_children():
-                    widget.destroy()
-                self.family_member_entries.clear()
-                self.app.add_member_button.configure(state="normal")
-            elif is_couple_session:
-                self.app.prenom2_couple.delete(0, 'end')
-                self.app.nom2_couple.delete(0, 'end')
-            
-            self.app.personal_note.delete(0, 'end')
+            # Réinitialise le formulaire pour la prochaine saisie.
+            # La méthode reset_form s'occupe de vider tous les champs (y compris enfant, famille, etc.)
+            self.reset_form(confirm=False)
         except ValueError:
             messagebox.showerror("Erreur de format", "Le montant doit être un nombre valide.")
         except Exception as e:
             messagebox.showerror("Erreur inattendue", f"Une erreur est survenue : {e}")
 
-    def reset_form(self):
+    def reset_form(self, confirm=True):
         """Vide tous les champs du formulaire."""
-        if messagebox.askyesno("Confirmation", "Voulez-vous vraiment vider tout le formulaire ?"):
+        if confirm and not messagebox.askyesno("Confirmation", "Voulez-vous vraiment vider tout le formulaire ?"):
+            return
+        else:
             self.app.nom.delete(0, 'end')
             self.app.prenom.delete(0, 'end')
             self.app.adresse.delete(0, 'end')

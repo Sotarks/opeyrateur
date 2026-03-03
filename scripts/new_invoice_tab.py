@@ -11,26 +11,65 @@ def create_new_invoice_tab(app):
     # =================================================================================
     # COLONNE GAUCHE : INFORMATIONS PATIENT
     # =================================================================================
-    left_panel = ctk.CTkFrame(app.new_invoice_tab, fg_color="transparent")
-    left_panel.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
-    left_panel.grid_columnconfigure(0, weight=1)
+    app.new_invoice_left_panel = ctk.CTkFrame(app.new_invoice_tab, fg_color="transparent")
+    app.new_invoice_left_panel.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+    app.new_invoice_left_panel.grid_columnconfigure(0, weight=1)
 
-    # Titre Section
-    ctk.CTkLabel(left_panel, text="1. Informations Patient", font=app.font_title, text_color="#3498db").grid(row=0, column=0, sticky="w", pady=(0, 15))
+    # --- Titre Section 1: Prestation ---
+    ctk.CTkLabel(app.new_invoice_left_panel, text="1. Prestation", font=app.font_title, text_color="#3498db").grid(row=0, column=0, sticky="w", pady=(0, 15))
+
+    # --- Carte Détails ---
+    details_frame = ctk.CTkFrame(app.new_invoice_left_panel, corner_radius=15, fg_color=("white", "gray20"))
+    details_frame.grid(row=1, column=0, sticky="ew", pady=(0, 15))
+    details_frame.grid_columnconfigure(0, weight=1)
+
+    # Prestation & Montant
+    ctk.CTkLabel(details_frame, text="Type de séance & Prix", font=app.font_bold).pack(anchor="w", padx=20, pady=(15, 5))
+    
+    pres_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
+    pres_frame.pack(fill="x", padx=20, pady=(0, 15))
+    
+    app.prestation = ctk.CTkOptionMenu(pres_frame, values=list(app.prestations_prix.keys()), command=app.invoice_manager.update_form, height=40)
+    app.prestation.pack(side="left", fill="x", expand=True, padx=(0, 10))
+    
+    app.montant = ctk.CTkEntry(pres_frame, placeholder_text="Prix", width=100, height=40, font=ctk.CTkFont(size=16, weight="bold"))
+    app.montant.pack(side="right")
+
+    # Date Séance
+    ctk.CTkLabel(details_frame, text="Date de la séance", font=app.font_bold).pack(anchor="w", padx=20, pady=(5, 5))
+    
+    date_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
+    date_frame.pack(fill="x", padx=20, pady=(0, 20))
+    
+    app.seance_date = ctk.CTkEntry(date_frame, placeholder_text="JJ/MM/AAAA", height=40)
+    app.seance_date.pack(side="left", fill="x", expand=True)
+    app.seance_date.insert(0, datetime.now().strftime("%d/%m/%Y"))
+    app.seance_date.configure(state="readonly")
+    app.seance_date.bind("<1>", lambda event: app._open_calendar(app.seance_date))
+
+    app.seance_non_lieu_var = ctk.BooleanVar()
+    app.seance_non_lieu_check = ctk.CTkCheckBox(date_frame, text="Non-lieu", variable=app.seance_non_lieu_var, command=app.invoice_manager.toggle_seance_date)
+    app.seance_non_lieu_check.pack(side="left", padx=(15, 0))
+
+    # --- Titre Section 2: Patient ---
+    ctk.CTkLabel(app.new_invoice_left_panel, text="2. Informations Patient", font=app.font_title, text_color="#3498db").grid(row=2, column=0, sticky="w", pady=(10, 15))
 
     # --- Carte Identité Standard ---
-    client_frame = ctk.CTkFrame(left_panel, corner_radius=15, fg_color=("white", "gray20"))
-    client_frame.grid(row=1, column=0, sticky="ew", pady=(0, 15))
-    client_frame.grid_columnconfigure(1, weight=1)
+    app.client_frame = ctk.CTkFrame(app.new_invoice_left_panel, corner_radius=15, fg_color=("white", "gray20"))
+    app.client_frame.grid(row=3, column=0, sticky="ew", pady=(0, 0))
+    app.client_frame.grid_columnconfigure(1, weight=1)
+
+    # --- Frame for suggestions (placed dynamically) ---
+    app.patient_suggestion_frame = ctk.CTkScrollableFrame(app.new_invoice_left_panel, corner_radius=8, fg_color=("white", "gray25"), border_width=1, border_color=("gray80", "gray30"))
 
     # Civilité & Nom
-    app.p1_civility_frame = ctk.CTkFrame(client_frame, fg_color="transparent")
+    app.p1_civility_frame = ctk.CTkFrame(app.client_frame, fg_color="transparent")
     # Note: Le placement grid de p1_civility_frame est géré dynamiquement par InvoiceManager
     
     app.attention_var = ctk.CTkOptionMenu(app.p1_civility_frame, values=["Madame", "Monsieur"], width=100, height=35)
     app.attention_var.pack(pady=5)
 
-    p1_name_frame = ctk.CTkFrame(client_frame, fg_color="transparent")
+    p1_name_frame = ctk.CTkFrame(app.client_frame, fg_color="transparent")
     p1_name_frame.grid(row=1, column=1, sticky='ew', padx=15, pady=15)
     p1_name_frame.grid_columnconfigure((0, 1), weight=1)
     
@@ -39,20 +78,24 @@ def create_new_invoice_tab(app):
     
     app.prenom = ctk.CTkEntry(p1_name_frame, height=40, font=app.font_large)
     app.prenom.grid(row=1, column=0, padx=(0, 5), sticky="ew")
+    app.prenom.bind("<KeyRelease>", lambda e: app.invoice_manager._on_patient_search_change())
+    app.prenom.bind("<FocusOut>", lambda e: app.invoice_manager._hide_suggestions_on_focus_out())
     
     app.nom = ctk.CTkEntry(p1_name_frame, height=40, font=app.font_large)
     app.nom.grid(row=1, column=1, padx=(5, 0), sticky="ew")
+    app.nom.bind("<KeyRelease>", lambda e: app.invoice_manager._on_patient_search_change())
+    app.nom.bind("<FocusOut>", lambda e: app.invoice_manager._hide_suggestions_on_focus_out())
 
     # Adresse
-    ctk.CTkLabel(client_frame, text="Adresse complète (optionnel)", font=app.font_bold, text_color="gray").grid(row=2, column=1, sticky="w", padx=15, pady=(0, 5))
-    app.adresse = ctk.CTkEntry(client_frame, height=35)
+    ctk.CTkLabel(app.client_frame, text="Adresse complète (optionnel)", font=app.font_bold, text_color="gray").grid(row=2, column=1, sticky="w", padx=15, pady=(0, 5))
+    app.adresse = ctk.CTkEntry(app.client_frame, height=35)
     app.adresse.grid(row=3, column=1, sticky='ew', padx=15, pady=(0, 15))
 
     # --- Cadres Dynamiques (Enfant / Famille / Couple) ---
-    # Ces cadres seront placés en row=2 par InvoiceManager
+    # Ces cadres seront placés en row=5 par InvoiceManager
     
     # 1. Famille
-    app.family_frame = ctk.CTkFrame(left_panel, corner_radius=15, fg_color=("white", "gray20"))
+    app.family_frame = ctk.CTkFrame(app.new_invoice_left_panel, corner_radius=15, fg_color=("white", "gray20"))
     app.family_frame.grid_columnconfigure(0, weight=1)
 
     ctk.CTkLabel(app.family_frame, text="Membres de la famille", font=app.font_bold, text_color="gray").pack(anchor="w", padx=15, pady=(10, 5))
@@ -64,7 +107,7 @@ def create_new_invoice_tab(app):
     app.add_member_button.pack(pady=(5, 10), padx=10, fill="x")
 
     # 2. Couple
-    app.couple_frame = ctk.CTkFrame(left_panel, corner_radius=15, fg_color=("white", "gray20"))
+    app.couple_frame = ctk.CTkFrame(app.new_invoice_left_panel, corner_radius=15, fg_color=("white", "gray20"))
     app.couple_frame.grid_columnconfigure(0, weight=1)
 
     ctk.CTkLabel(app.couple_frame, text="Second Partenaire", font=app.font_bold, text_color="gray").pack(anchor="w", padx=15, pady=(10, 5))
@@ -82,7 +125,7 @@ def create_new_invoice_tab(app):
     app.nom2_couple.grid(row=1, column=1, padx=(5, 0), sticky="ew")
 
     # 3. Enfant
-    app.child_info_frame = ctk.CTkFrame(left_panel, corner_radius=15, fg_color=("white", "gray20"))
+    app.child_info_frame = ctk.CTkFrame(app.new_invoice_left_panel, corner_radius=15, fg_color=("white", "gray20"))
     app.child_info_frame.grid_columnconfigure(0, weight=1)
     
     ctk.CTkLabel(app.child_info_frame, text="Informations Enfant", font=app.font_bold, text_color="gray").pack(anchor="w", padx=15, pady=(10, 5))
@@ -121,45 +164,16 @@ def create_new_invoice_tab(app):
     right_panel.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
     right_panel.grid_columnconfigure(0, weight=1)
 
-    ctk.CTkLabel(right_panel, text="2. Détails de la séance", font=app.font_title, text_color="#e67e22").grid(row=0, column=0, sticky="w", pady=(0, 15))
-
-    # --- Carte Détails ---
-    details_frame = ctk.CTkFrame(right_panel, corner_radius=15, fg_color=("white", "gray20"))
-    details_frame.grid(row=1, column=0, sticky="ew")
-    details_frame.grid_columnconfigure(0, weight=1)
-
-    # Date Séance
-    ctk.CTkLabel(details_frame, text="Date de la séance", font=app.font_bold).pack(anchor="w", padx=20, pady=(15, 5))
-    
-    date_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
-    date_frame.pack(fill="x", padx=20)
-    
-    app.seance_date = ctk.CTkEntry(date_frame, placeholder_text="JJ/MM/AAAA", height=40)
-    app.seance_date.pack(side="left", fill="x", expand=True)
-    app.seance_date.insert(0, datetime.now().strftime("%d/%m/%Y"))
-    app.seance_date.configure(state="readonly")
-    app.seance_date.bind("<1>", lambda event: app._open_calendar(app.seance_date))
-
-    app.seance_non_lieu_var = ctk.BooleanVar()
-    app.seance_non_lieu_check = ctk.CTkCheckBox(date_frame, text="Non-lieu", variable=app.seance_non_lieu_var, command=app.invoice_manager.toggle_seance_date)
-    app.seance_non_lieu_check.pack(side="left", padx=(15, 0))
-
-    # Prestation & Montant
-    ctk.CTkLabel(details_frame, text="Prestation & Prix", font=app.font_bold).pack(anchor="w", padx=20, pady=(15, 5))
-    
-    pres_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
-    pres_frame.pack(fill="x", padx=20)
-    
-    app.prestation = ctk.CTkOptionMenu(pres_frame, values=list(app.prestations_prix.keys()), command=app.invoice_manager.update_form, height=40)
-    app.prestation.pack(side="left", fill="x", expand=True, padx=(0, 10))
-    
-    app.montant = ctk.CTkEntry(pres_frame, placeholder_text="Prix", width=100, height=40, font=ctk.CTkFont(size=16, weight="bold"))
-    app.montant.pack(side="right")
+    ctk.CTkLabel(right_panel, text="3. Règlement & Validation", font=app.font_title, text_color="#e67e22").grid(row=0, column=0, sticky="w", pady=(0, 15))
 
     # Paiement
-    ctk.CTkLabel(details_frame, text="Règlement", font=app.font_bold).pack(anchor="w", padx=20, pady=(15, 5))
+    payment_card = ctk.CTkFrame(right_panel, corner_radius=15, fg_color=("white", "gray20"))
+    payment_card.grid(row=1, column=0, sticky="ew", pady=(0, 15))
+    payment_card.grid_columnconfigure(0, weight=1)
+
+    ctk.CTkLabel(payment_card, text="Règlement", font=app.font_bold).pack(anchor="w", padx=20, pady=(15, 5))
     
-    payment_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
+    payment_frame = ctk.CTkFrame(payment_card, fg_color="transparent")
     payment_frame.pack(fill="x", padx=20, pady=(0, 15))
     payment_frame.grid_columnconfigure((0, 1), weight=1)
 
@@ -174,8 +188,8 @@ def create_new_invoice_tab(app):
     app.payment_date_entry.bind("<1>", lambda event: app._open_calendar(app.payment_date_entry))
 
     # Note personnelle
-    ctk.CTkLabel(details_frame, text="Note interne (optionnel)", font=app.font_bold, text_color="gray").pack(anchor="w", padx=20, pady=(5, 5))
-    app.personal_note = ctk.CTkEntry(details_frame, placeholder_text="Ne sera pas affiché sur le PDF", height=35)
+    ctk.CTkLabel(payment_card, text="Note interne (optionnel)", font=app.font_bold, text_color="gray").pack(anchor="w", padx=20, pady=(5, 5))
+    app.personal_note = ctk.CTkEntry(payment_card, placeholder_text="Ne sera pas affiché sur le PDF", height=35)
     app.personal_note.pack(fill="x", padx=20, pady=(0, 20))
 
     # Boutons d'action
