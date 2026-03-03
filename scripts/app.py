@@ -621,6 +621,30 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Erreur d'export", f"Une erreur est survenue lors de l'exportation :\n{e}")
 
+    def _export_search_results_pdf(self):
+        """Exporte les résultats de recherche actuels dans un fichier PDF."""
+        if not hasattr(self, 'current_search_results_df') or self.current_search_results_df.empty:
+            messagebox.showwarning("Export impossible", "Aucun résultat à exporter.")
+            return
+
+        try:
+            from .pdf_generator import generate_search_report
+            
+            # Titre du rapport basé sur les filtres
+            year = self.search_year_var.get()
+            month = self.search_month_var.get()
+            title = f"Rapport Recherche - {year}"
+            if month != "Tous":
+                title += f" - {month}"
+            
+            path = generate_search_report(title, self.current_search_results_df)
+            
+            from .pdf_viewer import PDFViewer
+            PDFViewer(self, path, download_filename=os.path.basename(path))
+            
+        except Exception as e:
+            messagebox.showerror("Erreur d'export", f"Une erreur est survenue lors de l'exportation PDF :\n{e}")
+
     def _open_calendar(self, entry_widget, make_readonly=True):
         """Ouvre une fenêtre Toplevel avec un calendrier pour sélectionner une date."""
         # Protection contre les doubles clics (ouverture multiple)

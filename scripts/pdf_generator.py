@@ -460,3 +460,85 @@ def generate_budget_report(year, month, quarter, df_budget):
     full_path = os.path.join(config.BUDGET_DIR, filename)
     pdf.output(full_path)
     return full_path
+
+def generate_search_report(title, df_results):
+    """Génère un PDF récapitulatif des résultats de recherche."""
+    import pandas as pd
+    
+    pdf = PDF()
+    pdf.set_auto_page_break(auto=True, margin=25)
+    pdf.add_page()
+
+    # Titre
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, title, ln=True, align='C')
+    pdf.ln(5)
+
+    # Résumé
+    total = df_results['Montant'].sum() if not df_results.empty and 'Montant' in df_results.columns else 0
+    count = len(df_results)
+    
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(0, 8, f"Nombre de factures : {count}", ln=True)
+    pdf.cell(0, 8, f"Total : {total:.2f} EUR", ln=True)
+    pdf.ln(10)
+
+    def draw_header(pdf_instance):
+        # Tableau
+        pdf_instance.set_font("Arial", 'B', 9)
+        pdf_instance.set_fill_color(240, 240, 240)
+        
+        # En-têtes
+        pdf_instance.cell(22, 8, "Date", 1, 0, 'C', fill=True)
+        pdf_instance.cell(35, 8, "N Facture", 1, 0, 'C', fill=True)
+        pdf_instance.cell(45, 8, "Patient", 1, 0, 'C', fill=True)
+        pdf_instance.cell(45, 8, "Prestation", 1, 0, 'C', fill=True)
+        pdf_instance.cell(23, 8, "Statut", 1, 0, 'C', fill=True)
+        pdf_instance.cell(20, 8, "Montant", 1, 1, 'C', fill=True)
+
+        pdf_instance.set_font("Arial", '', 8)
+
+    draw_header(pdf)
+
+    if not df_results.empty:
+        # Tri par date si possible
+        try:
+            df_results = df_results.copy()
+            if 'Date' in df_results.columns:
+                df_results['DateObj'] = pd.to_datetime(df_results['Date'], format='%d/%m/%Y', errors='coerce')
+                df_results = df_results.sort_values('DateObj')
+        except:
+            pass
+
+        row_count = 0
+        ENTRIES_PER_PAGE = 20
+
+        for _, row in df_results.iterrows():
+            if row_count >= ENTRIES_PER_PAGE:
+                pdf.add_page()
+                draw_header(pdf)
+                row_count = 0
+
+            patient_name = row.get('Nom_Enfant')
+            if pd.isna(patient_name) or not patient_name:
+                patient_name = f"{row.get('Prenom', '')} {row.get('Nom', '')}"
+            
+            statut = str(row.get('Methode_Paiement', ''))
+            pdf.set_text_color(200, 0, 0) if statut == "Impayé" else pdf.set_text_color(0)
+
+            pdf.cell(22, 8, str(row.get('Date', '')), 1, 0, 'C')
+            pdf.cell(35, 8, str(row.get('ID', '')), 1, 0, 'C')
+            pdf.cell(45, 8, str(patient_name)[:25], 1, 0, 'L')
+            pdf.cell(45, 8, str(row.get('Prestation', ''))[:25], 1, 0, 'L')
+            pdf.cell(23, 8, statut[:12], 1, 0, 'C')
+            pdf.cell(20, 8, f"{row.get('Montant', 0):.2f}", 1, 1, 'R')
+            
+            pdf.set_text_color(0)
+            row_count += 1
+
+    # Sauvegarde
+    os.makedirs(config.BUDGET_DIR, exist_ok=True)
+    filename = f"Export_Recherche_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    full_path = os.path.join(config.BUDGET_DIR, filename)
+    pdf.output(full_path)
+    return full_path

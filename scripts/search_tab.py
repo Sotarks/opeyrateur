@@ -76,7 +76,11 @@ def create_search_tab(app):
 
     # Bouton Export (Sidebar)
     app.export_button = ctk.CTkButton(sidebar, text="Exporter en Excel", command=app._export_search_results, fg_color="#34D399", hover_color="#10B981", font=app.font_button, height=40)
-    app.export_button.pack(fill="x", padx=20, pady=(0, 20))
+    app.export_button.pack(fill="x", padx=20, pady=(0, 10))
+
+    # Bouton Export PDF (Sidebar)
+    app.export_pdf_button = ctk.CTkButton(sidebar, text="Exporter en PDF", command=app._export_search_results_pdf, fg_color="#E67E22", hover_color="#D35400", font=app.font_button, height=40)
+    app.export_pdf_button.pack(fill="x", padx=20, pady=(0, 20))
 
     # =================================================================================
     # 2. CONTENU PRINCIPAL (DROITE) - Résultats

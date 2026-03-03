@@ -215,18 +215,20 @@ def save_to_excel(data):
             df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
 
 def get_invoice_path(data, get_folder=False):
-    """Construit le chemin du PDF de la facture avec le nouveau nommage."""
+    """Construit le chemin du PDF de la facture avec la structure Année/Mois/Jour."""
     try:
         invoice_date = datetime.strptime(data['Date'], '%d/%m/%Y')
-        folder_date_str = invoice_date.strftime('%Y-%m-%d')
         year_str = str(invoice_date.year)
+        month_str = f"{invoice_date.month:02d}_{MONTHS_FR[invoice_date.month - 1]}"
+        folder_date_str = invoice_date.strftime('%Y-%m-%d')
     except (ValueError, TypeError):
         now = datetime.now()
         invoice_date = now # Fallback for date used in filename
-        folder_date_str = now.strftime('%Y-%m-%d')
         year_str = str(now.year)
+        month_str = f"{now.month:02d}_{MONTHS_FR[now.month - 1]}"
+        folder_date_str = now.strftime('%Y-%m-%d')
 
-    output_dir = os.path.join(config.FACTURES_DIR, year_str, folder_date_str)
+    output_dir = os.path.join(config.FACTURES_DIR, year_str, month_str, folder_date_str)
 
     if get_folder:
         return output_dir

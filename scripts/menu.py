@@ -147,11 +147,15 @@ def create_menu(app):
     app.salary_progress_bar.pack()
     app.salary_progress_bar.set(0)
 
-    # --- Graphique Évolution ---
-    ctk.CTkLabel(content, text="Évolution du Chiffre d'Affaires (6 mois)", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=5, column=0, columnspan=2, sticky="w", pady=(30, 10))
+    # --- Graphiques (Ligne 5 & 6) ---
+    ctk.CTkLabel(content, text="Évolution Financière (6 mois)", font=ctk.CTkFont(family="Montserrat", size=18, weight="bold")).grid(row=5, column=0, sticky="w", pady=(30, 10), padx=10)
+    ctk.CTkLabel(content, text="Répartition des Actes (Année)", font=ctk.CTkFont(family="Montserrat", size=18, weight="bold")).grid(row=5, column=1, sticky="w", pady=(30, 10), padx=10)
     
     app.dashboard_chart_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
-    app.dashboard_chart_frame.grid(row=6, column=0, columnspan=2, padx=10, sticky="ew")
+    app.dashboard_chart_frame.grid(row=6, column=0, padx=10, sticky="nsew")
+
+    app.dashboard_pie_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
+    app.dashboard_pie_frame.grid(row=6, column=1, padx=10, sticky="nsew")
 
     # --- Dernières Factures ---
     ctk.CTkLabel(content, text="Dernières Factures", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=7, column=0, columnspan=2, sticky="w", pady=(30, 10))

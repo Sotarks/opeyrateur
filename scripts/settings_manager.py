@@ -47,6 +47,18 @@ DEFAULT_SETTINGS = {
     'App': {
         'window_geometry': '1280x800',
         'ui_zoom': '1.0'
+    },
+    'Agenda': {
+        # 0=Lundi, 6=Dimanche. Format: "start-end". Vide = Non travaillé.
+        'work_hours': json.dumps({
+            "0": "10:00-18:00", # Lundi
+            "1": "10:00-18:00", # Mardi
+            "2": "",            # Mercredi (Off)
+            "3": "10:00-18:00", # Jeudi
+            "4": "",            # Vendredi (Off)
+            "5": "10:00-17:00", # Samedi
+            "6": ""             # Dimanche (Off)
+        })
     }
 }
 
@@ -209,6 +221,26 @@ def save_ignored_invoices(invoice_ids):
     # On s'assure que c'est bien une liste de strings
     ids_as_strings = [str(id) for id in invoice_ids]
     parser.set('App', 'ignored_invoices', json.dumps(ids_as_strings))
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+        parser.write(configfile)
+    _invalidate_caches()
+
+def get_working_hours():
+    """Récupère les horaires de travail (dict jour -> plage)."""
+    setup_default_settings()
+    parser = _get_parser()
+    try:
+        data_str = parser.get('Agenda', 'work_hours', fallback='{}')
+        return json.loads(data_str)
+    except (json.JSONDecodeError, configparser.Error):
+        return json.loads(DEFAULT_SETTINGS['Agenda']['work_hours'])
+
+def save_working_hours(data):
+    """Sauvegarde les horaires de travail."""
+    parser = _get_parser()
+    if not parser.has_section('Agenda'):
+        parser.add_section('Agenda')
+    parser.set('Agenda', 'work_hours', json.dumps(data))
     with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
         parser.write(configfile)
     _invalidate_caches()

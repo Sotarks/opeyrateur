@@ -110,6 +110,7 @@ class SettingsUI:
     def _build_personalization_settings(self, parent):
         ctk.CTkButton(parent, text="Modifier les informations des PDF", font=self.app.font_button, command=self._open_pdf_settings_window, height=40).pack(fill="x", padx=20, pady=5)
         ctk.CTkButton(parent, text="Changer le code PIN", font=self.app.font_button, command=self._open_change_pin_window, height=40).pack(fill="x", padx=20, pady=5)
+        ctk.CTkButton(parent, text="Configurer les horaires de travail", font=self.app.font_button, command=self._open_work_hours_window, height=40).pack(fill="x", padx=20, pady=5)
         
         # Zoom UI
         zoom_frame = ctk.CTkFrame(parent, fg_color="transparent")
@@ -169,9 +170,12 @@ class SettingsUI:
         ctk.CTkLabel(parent, text="Outils de correction en cas de problème d'affichage ou de données.", font=self.app.font_regular, text_color="gray").pack(anchor="w", padx=20, pady=(0, 10))
         
         btn_grid = ctk.CTkFrame(parent, fg_color="transparent")
-        btn_grid.pack(fill="x", padx=20)
+        btn_grid.pack(fill="x", padx=20, pady=5)
         ctk.CTkButton(btn_grid, text="Régénérer PDF Factures", font=self.app.font_button, command=self._regenerate_all_invoice_pdfs, height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ctk.CTkButton(btn_grid, text="Régénérer Excel Factures", font=self.app.font_button, command=self._regenerate_all_invoices_excel, height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+        ctk.CTkLabel(parent, text="Organisation des fichiers", font=self.app.font_bold, text_color="#3498db").pack(anchor="w", padx=20, pady=(20, 10))
+        ctk.CTkButton(parent, text="🗂️ Reclasser les factures (Année > Mois > Jour)", font=self.app.font_button, command=self._reclassify_invoices, height=40).pack(fill="x", padx=20, pady=5)
 
     def _build_debug_settings(self, parent, window):
         debug_ctrl = ctk.CTkFrame(parent, fg_color="transparent")
@@ -474,6 +478,49 @@ class SettingsUI:
         else:
             messagebox.showerror("Erreur", message, parent=window)
 
+    def _open_work_hours_window(self):
+        """Ouvre une fenêtre pour configurer les horaires."""
+        win = ctk.CTkToplevel(self.app)
+        win.title("Horaires de travail")
+        win.geometry("400x500")
+        win.transient(self.app)
+        win.grab_set()
+
+        ctk.CTkLabel(win, text="Définir les horaires (Agenda)", font=self.app.font_large).pack(pady=20)
+        ctk.CTkLabel(win, text="Format: HH:MM-HH:MM (ex: 10:00-18:00)\nLaisser vide pour un jour non travaillé.", text_color="gray").pack(pady=(0, 10))
+
+        days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        current_hours = settings_manager.get_working_hours()
+        entries = {}
+
+        frame = ctk.CTkFrame(win, fg_color="transparent")
+        frame.pack(fill="both", expand=True, padx=20)
+
+        for i, day in enumerate(days):
+            row = ctk.CTkFrame(frame, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            ctk.CTkLabel(row, text=day, width=80, anchor="w").pack(side="left")
+            entry = ctk.CTkEntry(row, placeholder_text="ex: 09:00-17:00")
+            entry.pack(side="right", fill="x", expand=True)
+            entry.insert(0, current_hours.get(str(i), ""))
+            entries[str(i)] = entry
+
+        def save():
+            new_hours = {}
+            for k, e in entries.items():
+                val = e.get().strip()
+                # Validation basique
+                if val and "-" not in val:
+                    messagebox.showwarning("Format invalide", f"Format incorrect pour {days[int(k)]}")
+                    return
+                new_hours[k] = val
+            
+            settings_manager.save_working_hours(new_hours)
+            messagebox.showinfo("Succès", "Horaires enregistrés.", parent=win)
+            win.destroy()
+
+        ctk.CTkButton(win, text="Enregistrer", command=save).pack(pady=20)
+
     def _delete_directory(self, dir_path, dir_name):
         if messagebox.askyesno("Confirmation", f"Êtes-vous sûr de vouloir supprimer définitivement le dossier '{dir_name}' et tout son contenu ?"):
             import shutil
@@ -692,3 +739,69 @@ class SettingsUI:
         except queue.Empty:
             if window.winfo_exists():
                 self.app.after(100, self._update_regeneration_progress, window, bar, p_label, t_label, total, start_time)
+
+    def _reclassify_invoices(self):
+        """Lance le reclassement des fichiers de factures dans la structure Année/Mois/Jour."""
+        if not messagebox.askyesno("Confirmation", "Cette opération va réorganiser tous vos dossiers de factures pour les classer par mois.\n\nL'ancienne structure (Année/Jour) sera remplacée par (Année/Mois/Jour).\n\nCette action peut prendre quelques minutes. Voulez-vous continuer ?"):
+            return
+
+        total_files = 0
+        for root, _, files in os.walk(config.FACTURES_DIR):
+            for file in files:
+                if file.lower().endswith('.pdf'):
+                    total_files += 1
+
+        if total_files == 0:
+            messagebox.showinfo("Information", "Aucune facture à reclasser.")
+            return
+
+        progress_window = ctk.CTkToplevel(self.app)
+        progress_window.title("Reclassement en cours")
+        progress_window.geometry("450x200")
+        progress_window.transient(self.app)
+        progress_window.grab_set()
+        progress_window.protocol("WM_DELETE_WINDOW", lambda: None) # Disable closing
+
+        ctk.CTkLabel(progress_window, text="Reclassement des fichiers PDF...", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(20, 10))
+        progress_bar = ctk.CTkProgressBar(progress_window, width=400)
+        progress_bar.pack(pady=10, padx=20)
+        progress_bar.set(0)
+        progress_label = ctk.CTkLabel(progress_window, text=f"Fichier 0 / {total_files}")
+        progress_label.pack()
+        time_label = ctk.CTkLabel(progress_window, text="Calcul du temps...")
+        time_label.pack(pady=5)
+
+        thread = threading.Thread(target=self._reclassify_worker, args=(total_files,), daemon=True)
+        thread.start()
+        self._update_regeneration_progress(progress_window, progress_bar, progress_label, time_label, total_files, time.time())
+
+    def _reclassify_worker(self, total_files):
+        """Worker thread pour déplacer les fichiers PDF."""
+        from .data_manager import MONTHS_FR
+        try:
+            all_pdf_paths = [os.path.join(root, filename) for root, _, files in os.walk(config.FACTURES_DIR) for filename in files if filename.lower().endswith('.pdf')]
+
+            for i, old_path in enumerate(all_pdf_paths):
+                filename = os.path.basename(old_path)
+                try:
+                    date_part = filename.split('_')[-1].split('-')[0]
+                    if len(date_part) == 8 and date_part.isdigit():
+                        file_date = datetime.strptime(date_part, '%Y%m%d')
+                        year_str = str(file_date.year)
+                        month_str = f"{file_date.month:02d}_{MONTHS_FR[file_date.month - 1]}"
+                        day_folder_str = file_date.strftime('%Y-%m-%d')
+                        new_dir = os.path.join(config.FACTURES_DIR, year_str, month_str, day_folder_str)
+                        new_path = os.path.join(new_dir, filename)
+                        if os.path.abspath(old_path) != os.path.abspath(new_path):
+                            os.makedirs(new_dir, exist_ok=True)
+                            shutil.move(old_path, new_path)
+                except (IndexError, ValueError): pass
+                self.regeneration_queue.put(('progress', i + 1))
+            
+            for root, dirs, files in os.walk(config.FACTURES_DIR, topdown=False):
+                if not dirs and not files and os.path.abspath(root) != os.path.abspath(config.FACTURES_DIR):
+                    try: os.rmdir(root)
+                    except OSError: pass
+            self.regeneration_queue.put(('done', total_files))
+        except Exception as e:
+            self.regeneration_queue.put(('error', str(e)))

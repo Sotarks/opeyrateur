@@ -96,14 +96,23 @@ class InvoiceActions:
         # --- Carte 3: Informations Enfant (si applicable) ---
         is_child = "enfant" in invoice_data.get("Prestation", "").lower() or "adolescent" in invoice_data.get("Prestation", "").lower()
         child_dob_entry = None
+        child_name_entry = None
         if is_child:
             child_card = ctk.CTkFrame(scroll_frame)
             child_card.grid(row=2, column=0, sticky="ew", pady=(0, 10))
             child_card.grid_columnconfigure(0, weight=1)
             ctk.CTkLabel(child_card, text="Informations Enfant", font=self.app.font_bold).grid(row=0, column=0, padx=15, pady=(10, 5), sticky="w")
-            ctk.CTkLabel(child_card, text="Date de naissance de l'enfant :").grid(row=1, column=0, padx=15, pady=(0, 5), sticky="w")
+            
+            ctk.CTkLabel(child_card, text="Nom de l'enfant :").grid(row=1, column=0, padx=15, pady=(0, 5), sticky="w")
+            child_name_entry = ctk.CTkEntry(child_card)
+            child_name_entry.grid(row=2, column=0, padx=15, pady=(0, 10), sticky="ew")
+            child_name_val = str(invoice_data.get('Nom_Enfant', ''))
+            if child_name_val.lower() == 'nan': child_name_val = ''
+            child_name_entry.insert(0, child_name_val)
+
+            ctk.CTkLabel(child_card, text="Date de naissance de l'enfant :").grid(row=3, column=0, padx=15, pady=(0, 5), sticky="w")
             child_dob_entry = ctk.CTkEntry(child_card)
-            child_dob_entry.grid(row=2, column=0, padx=15, pady=(0, 15), sticky="ew")
+            child_dob_entry.grid(row=4, column=0, padx=15, pady=(0, 15), sticky="ew")
             child_dob_entry.insert(0, invoice_data.get('Naissance_Enfant', ''))
             child_dob_entry.bind("<1>", lambda e: self.app._open_calendar(child_dob_entry, make_readonly=False))
 
@@ -143,6 +152,7 @@ class InvoiceActions:
 
         def on_update(open_after=False):
             dob = child_dob_entry.get() if child_dob_entry else None
+            child_name = child_name_entry.get().strip() if child_name_entry else None
             new_nom = nom_entry.get().strip()
             new_prenom = prenom_entry.get().strip()
             new_id = id_entry.get().strip()
@@ -151,7 +161,7 @@ class InvoiceActions:
             status = new_status_var.get()
             payment_date = payment_date_entry.get() if status != 'Impayé' else ''
             
-            self._update_invoice_status(invoice_data, status, payment_date, seance_date_entry.get(), dob, regen_pdf_var.get(), win, new_nom, new_prenom, new_id, new_creation_date, open_pdf_after=open_after)
+            self._update_invoice_status(invoice_data, status, payment_date, seance_date_entry.get(), dob, regen_pdf_var.get(), win, new_nom, new_prenom, new_id, new_creation_date, open_pdf_after=open_after, new_child_name=child_name)
 
         # --- Boutons d'action en bas ---
         btn_frame = ctk.CTkFrame(win)
@@ -161,7 +171,7 @@ class InvoiceActions:
         ctk.CTkButton(btn_frame, text="Sauvegarder et Fermer", font=self.app.font_button, command=lambda: on_update(False), height=40).grid(row=0, column=0, padx=(0, 5), sticky="ew")
         ctk.CTkButton(btn_frame, text="Sauvegarder et Ouvrir", font=self.app.font_button, command=lambda: on_update(True), height=40).grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
-    def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, new_child_dob, regen_pdf, window, new_nom=None, new_prenom=None, new_id=None, new_creation_date=None, open_pdf_after=False):
+    def _update_invoice_status(self, invoice_data, new_status, new_payment_date, new_seance_date, new_child_dob, regen_pdf, window, new_nom=None, new_prenom=None, new_id=None, new_creation_date=None, open_pdf_after=False, new_child_name=None):
         try:
             import pandas as pd
             
@@ -178,6 +188,7 @@ class InvoiceActions:
                     'Prenom': new_prenom if new_prenom else invoice_data.get('Prenom'),
                 })
                 if new_child_dob: new_data['Naissance_Enfant'] = new_child_dob
+                if new_child_name: new_data['Nom_Enfant'] = new_child_name
                 
                 # --- Mise à jour intelligente de l'ID ---
                 new_date_obj = datetime.strptime(new_creation_date, '%d/%m/%Y')
@@ -247,6 +258,7 @@ class InvoiceActions:
             sheet_df.loc[idx, 'Date_Paiement'] = new_payment_date
             sheet_df.loc[idx, 'Date_Seance'] = new_seance_date
             if new_child_dob: sheet_df.loc[idx, 'Naissance_Enfant'] = new_child_dob
+            if new_child_name: sheet_df.loc[idx, 'Nom_Enfant'] = new_child_name
             if new_nom: sheet_df.loc[idx, 'Nom'] = new_nom
             if new_prenom: sheet_df.loc[idx, 'Prenom'] = new_prenom
             

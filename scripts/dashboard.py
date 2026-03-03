@@ -15,13 +15,25 @@ def load_dashboard_data(app):
         # Optimisation : On ne vide plus le cache ici systématiquement.
         invoices_df = app._load_data_with_cache().copy() # Travaille sur une copie pour ne pas altérer le cache
         expenses_df = load_expenses(now.year)
+        
+        # Charge aussi l'année précédente si on est en début d'année (pour le graphique sur 6 mois)
+        if now.month < 6:
+            expenses_prev = load_expenses(now.year - 1)
+            if not expenses_prev.empty:
+                expenses_df = pd.concat([expenses_df, expenses_prev], ignore_index=True)
 
         revenue_month, sessions_month, sessions_year, unpaid_total, expenses_month = 0.0, 0, 0, 0.0, 0.0
         
         # --- Chart Data ---
         chart_labels = []
-        chart_values = []
+        chart_revenue = []
+        chart_expenses = []
         recent_invoices = []
+        prestation_dist = {}
+
+        # Préparation des DataFrames avec dates
+        if not expenses_df.empty:
+            expenses_df['Date'] = pd.to_datetime(expenses_df['Date'], format='%d/%m/%Y', errors='coerce')
 
         if not invoices_df.empty:
             invoices_df['Date'] = pd.to_datetime(invoices_df['Date'], format='%d/%m/%Y', errors='coerce')
@@ -36,10 +48,14 @@ def load_dashboard_data(app):
             yearly_invoices = invoices_df[invoices_df['Date'].dt.year == now.year]
             sessions_year = len(yearly_invoices)
             
+            # Répartition des prestations (Année en cours)
+            if not yearly_invoices.empty:
+                prestation_dist = yearly_invoices['Prestation'].value_counts().head(5).to_dict()
+            
             paid_monthly_invoices = paid_invoices_df[(paid_invoices_df['Date'].dt.year == now.year) & (paid_invoices_df['Date'].dt.month == now.month)]
             revenue_month = paid_monthly_invoices['Montant'].sum()
 
-            # Calculate last 6 months revenue for chart
+            # Calculate last 6 months revenue & expenses for chart
             for i in range(5, -1, -1):
                 target_date = now - pd.DateOffset(months=i)
                 month_name = MONTHS_FR[target_date.month - 1][:3]
@@ -49,14 +65,22 @@ def load_dashboard_data(app):
                     (paid_invoices_df['Date'].dt.year == target_date.year) &
                     (paid_invoices_df['Date'].dt.month == target_date.month)
                 ]['Montant'].sum()
-                chart_values.append(monthly_revenue)
+                chart_revenue.append(monthly_revenue)
+                
+                monthly_expense = 0.0
+                if not expenses_df.empty:
+                    monthly_expense = expenses_df[
+                        (expenses_df['Date'].dt.year == target_date.year) &
+                        (expenses_df['Date'].dt.month == target_date.month)
+                    ]['Montant'].sum()
+                chart_expenses.append(monthly_expense)
             
             # Récupère les 5 dernières factures
             recent_df = invoices_df.sort_values(by='Date', ascending=False).head(5)
             recent_invoices = recent_df.to_dict('records')
 
         if not expenses_df.empty:
-            expenses_df['Date'] = pd.to_datetime(expenses_df['Date'], format='%d/%m/%Y', errors='coerce')
+            # expenses_df['Date'] est déjà converti plus haut
             monthly_expenses = expenses_df[(expenses_df['Date'].dt.year == now.year) & (expenses_df['Date'].dt.month == now.month)]
             expenses_month = monthly_expenses['Montant'].sum()
 
@@ -92,7 +116,8 @@ def load_dashboard_data(app):
                 "prov_ops": prov_ops,
                 "progress": progress
             },
-            "chart_data": {"labels": chart_labels, "values": chart_values},
+            "chart_data": {"labels": chart_labels, "revenue": chart_revenue, "expenses": chart_expenses},
+            "prestation_dist": prestation_dist,
             "recent_invoices": recent_invoices,
             "success": True
         }
@@ -134,6 +159,10 @@ def update_dashboard_views(app, data):
     # Mise à jour du Graphique
     if hasattr(app, 'dashboard_chart_frame') and "chart_data" in data:
         _update_main_chart(app, data["chart_data"])
+
+    # Mise à jour du Camembert
+    if hasattr(app, 'dashboard_pie_frame') and "prestation_dist" in data:
+        _update_pie_chart(app, data["prestation_dist"])
 
     # Mise à jour des Dernières Factures
     if hasattr(app, 'dashboard_recent_invoices_frame') and "recent_invoices" in data:
@@ -180,7 +209,11 @@ def _update_main_chart(app, chart_data):
         fig.patch.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
         
-        bars = ax.bar(chart_data['labels'], chart_data['values'], color='#3498db', width=0.5)
+        # Barres pour le CA
+        bars = ax.bar(chart_data['labels'], chart_data['revenue'], color='#3498db', width=0.5, label="Recettes", zorder=2)
+        
+        # Ligne pour les dépenses
+        ax.plot(chart_data['labels'], chart_data['expenses'], color='#e74c3c', marker='o', linewidth=2, label="Dépenses", zorder=3)
         
         # Style minimaliste
         ax.spines['top'].set_visible(False)
@@ -190,12 +223,62 @@ def _update_main_chart(app, chart_data):
         ax.tick_params(axis='x', colors=text_color)
         ax.tick_params(axis='y', colors=text_color, labelsize=8)
         
+        # Légende simple
+        ax.legend(frameon=False, fontsize=8, loc='upper left')
+        
         canvas = FigureCanvasTkAgg(fig, master=app.dashboard_chart_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=5)
         plt.close(fig)
     except Exception as e:
         print(f"Erreur graphique dashboard: {e}")
+
+def _update_pie_chart(app, dist_data):
+    """Affiche le camembert de répartition des prestations."""
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    
+    for widget in app.dashboard_pie_frame.winfo_children():
+        widget.destroy()
+        
+    if not dist_data:
+        ctk.CTkLabel(app.dashboard_pie_frame, text="Pas assez de données", text_color="gray").pack(pady=20)
+        return
+
+    try:
+        bg_color = '#FFFFFF' if ctk.get_appearance_mode() == "Light" else '#2b2b2b'
+        text_color = 'gray' if ctk.get_appearance_mode() == "Light" else 'white'
+        
+        fig, ax = plt.subplots(figsize=(4, 2.5), dpi=100)
+        fig.patch.set_facecolor(bg_color)
+        
+        labels = list(dist_data.keys())
+        sizes = list(dist_data.values())
+        
+        # Couleurs douces
+        colors = ['#3498db', '#2ecc71', '#9b59b6', '#f1c40f', '#e67e22']
+        
+        wedges, texts, autotexts = ax.pie(sizes, labels=None, autopct='%1.0f%%', startangle=90, colors=colors, pctdistance=0.85)
+        
+        # Style anneau (Donut)
+        centre_circle = plt.Circle((0,0), 0.70, fc=bg_color)
+        fig.gca().add_artist(centre_circle)
+        
+        # Style du texte
+        plt.setp(autotexts, size=8, weight="bold", color="white")
+        
+        # Légende à droite
+        ax.legend(wedges, labels, title="Prestations", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1), frameon=False, fontsize=7)
+        
+        ax.axis('equal')  
+        plt.tight_layout()
+        
+        canvas = FigureCanvasTkAgg(fig, master=app.dashboard_pie_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
+        plt.close(fig)
+    except Exception as e:
+        print(f"Erreur pie chart: {e}")
 
 def _update_recent_invoices(app, invoices):
     """Affiche la liste des dernières factures."""
