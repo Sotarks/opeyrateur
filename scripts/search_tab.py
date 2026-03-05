@@ -66,6 +66,7 @@ def create_search_tab(app):
     app.search_entry = ctk.CTkEntry(search_card, placeholder_text="Nom ou prénom...", height=35)
     app.search_entry.pack(fill="x", padx=15, pady=(0, 15))
     app.search_entry.bind("<Return>", lambda event: app._apply_filters_and_search())
+    app.search_entry.bind("<KeyRelease>", app._on_main_search_change)
 
     # Boutons d'action
     app.search_button = ctk.CTkButton(search_card, text="Rechercher", command=app._apply_filters_and_search, font=app.font_button, height=40)

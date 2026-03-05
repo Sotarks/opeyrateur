@@ -128,6 +128,7 @@ class App(ctk.CTk):
         # --- Caches pour la performance ---
         self.data_cache = {}
         self.current_search_results_df = None
+        self._search_job = None # Pour dé-bouncer la recherche principale
 
         # Assure que la configuration du PIN existe
         pin_manager.setup_pin_if_needed()
@@ -583,6 +584,12 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Erreur de filtrage", f"Une erreur est survenue : {e}")
 
+    def _on_main_search_change(self, event=None):
+        """Lance la recherche principale avec un délai pour améliorer la réactivité."""
+        if hasattr(self, '_search_job') and self._search_job:
+            self.after_cancel(self._search_job)
+        self._search_job = self.after(300, self._apply_filters_and_search)
+
     def _reset_filters(self):
         """Réinitialise tous les champs de filtre de la recherche."""
         self.search_year_var.set("Toutes")
@@ -902,9 +909,13 @@ class App(ctk.CTk):
         import pandas as pd
         from . import settings_manager
         from datetime import timedelta
-        
-        # Chargement des données (utilise le cache existant)
-        df = self._load_data_with_cache()
+
+        # --- OPTIMISATION: Charger uniquement les 2 dernières années pour la vérification ---
+        now = datetime.now()
+        df_current_year = self._load_data_with_cache(year=now.year)
+        df_prev_year = self._load_data_with_cache(year=now.year - 1) if now.year > 2000 else pd.DataFrame()
+        df = pd.concat([df_current_year, df_prev_year], ignore_index=True)
+
         if df.empty or 'Methode_Paiement' not in df.columns: return
 
         # Filtrage des impayés

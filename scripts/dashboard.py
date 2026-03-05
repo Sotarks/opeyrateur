@@ -12,8 +12,12 @@ def load_dashboard_data(app):
     import pandas as pd
     try:
         now = datetime.now()
-        # Optimisation : On ne vide plus le cache ici systématiquement.
-        invoices_df = app._load_data_with_cache().copy() # Travaille sur une copie pour ne pas altérer le cache
+
+        # --- OPTIMISATION: Charger uniquement les 2 dernières années pour le tableau de bord ---
+        df_current_year = app._load_data_with_cache(year=now.year)
+        df_prev_year = app._load_data_with_cache(year=now.year - 1) if now.year > 2000 else pd.DataFrame() # Sécurité pour la première année d'utilisation
+        invoices_df = pd.concat([df_current_year, df_prev_year], ignore_index=True).copy()
+
         expenses_df = load_expenses(now.year)
         
         # Charge aussi l'année précédente si on est en début d'année (pour le graphique sur 6 mois)

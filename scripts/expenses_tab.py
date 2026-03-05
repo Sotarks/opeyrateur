@@ -263,6 +263,8 @@ def _add_expense(app):
             message = "Dépense modifiée avec succès." if app.expense_to_edit else "Dépense ajoutée avec succès."
             app._show_status_message(message)
             refresh_expenses_list(app)
+            app._invalidate_data_cache()
+            app._update_dashboard_kpis()
             _cancel_edit_expense(app) # Réinitialise le formulaire et les boutons
         else:
             messagebox.showerror("Erreur", "Erreur lors de l'enregistrement.")

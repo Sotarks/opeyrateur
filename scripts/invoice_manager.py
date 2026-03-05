@@ -113,7 +113,7 @@ class InvoiceManager:
 
         # Crée une liste unique de patients, en privilégiant les infos les plus récentes
         df['DateObj'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
-        patients_df = df.sort_values('DateObj', ascending=False).drop_duplicates(subset=['Nom', 'Prenom'])
+        patients_df = df.sort_values('DateObj', ascending=False).drop_duplicates(subset=['Nom', 'Prenom']).reset_index(drop=True)
         
         mask = pd.Series([True] * len(patients_df))
         if query_prenom:
