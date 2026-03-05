@@ -1,8 +1,9 @@
 customtkinter
-pandas
 fpdf2
-tkcalendar
 openpyxl
-matplotlib
+pandas
 Pillow
+tkcalendar
+requests
+packaging
 PyMuPDF

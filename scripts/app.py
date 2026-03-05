@@ -17,6 +17,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="fpdf")
 # --- Imports des modules séparés ---
 from . import config 
 from . import pin_manager
+from . import updater
 from . import settings_manager 
 from .utils import resource_path
 from .menu import create_menu
@@ -165,8 +166,15 @@ class App(ctk.CTk):
         self.bind("<Escape>", lambda event: self._show_menu())
 
         # --- Barre de Statut ---
-        self.status_bar = ctk.CTkLabel(self, text="", height=25, anchor="w")
-        self.status_bar.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
+        self.status_bar_frame = ctk.CTkFrame(self, height=25, fg_color="transparent")
+        self.status_bar_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
+        self.status_bar_frame.grid_columnconfigure(1, weight=1)
+
+        self.version_label = ctk.CTkLabel(self.status_bar_frame, text=f"v{updater.APP_VERSION}", height=25, anchor="w", font=ctk.CTkFont(size=11), text_color="gray")
+        self.version_label.grid(row=0, column=0, sticky="w")
+
+        self.status_bar = ctk.CTkLabel(self.status_bar_frame, text="", height=25, anchor="w")
+        self.status_bar.grid(row=0, column=1, sticky="ew", padx=10)
 
         # --- Raccourcis Clavier contextuels ---
         self.bind("<Control-f>", self._focus_search)

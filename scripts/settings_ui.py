@@ -8,13 +8,17 @@ import time
 import random
 from datetime import datetime
 import ast
-import shutil
+import shutil 
 import zipfile
+import webbrowser
+from PIL import Image
 
 from . import config
 from . import settings_manager
 from . import pin_manager
 from .dashboard import update_dashboard_kpis
+from . import updater
+from .utils import resource_path
 
 class SettingsUI:
     def __init__(self, app):
@@ -60,6 +64,7 @@ class SettingsUI:
             ("Personnalisation", "🎨"),
             ("Gestion des Données", "💾"),
             ("Maintenance", "🛠️"),
+            ("À propos", "💡"),
             ("Debug / Tests", "🐞"),
             ("Zone de Danger", "☢️")
         ]
@@ -102,10 +107,43 @@ class SettingsUI:
             self._build_data_settings(scroll_frame)
         elif category == "Maintenance":
             self._build_maintenance_settings(scroll_frame)
+        elif category == "À propos":
+            self._build_about_section(scroll_frame, window)
         elif category == "Debug / Tests":
             self._build_debug_settings(scroll_frame, window)
         elif category == "Zone de Danger":
             self._build_danger_settings(scroll_frame)
+
+    def _build_about_section(self, parent, window):
+        """Construit la section 'À propos'."""
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(4, weight=1)
+
+        # Logo
+        try:
+            logo_path = resource_path(os.path.join("src", "logo.png"))
+            if os.path.exists(logo_path):
+                pil_img = Image.open(logo_path)
+                logo_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(100, 100))
+                ctk.CTkLabel(parent, image=logo_img, text="").pack(pady=(30, 10))
+        except Exception:
+            pass
+        
+        ctk.CTkLabel(parent, text="L'Opeyrateur", font=self.app.font_title).pack(pady=(0, 5))
+        
+        # Version
+        ctk.CTkLabel(parent, text=f"Version {updater.APP_VERSION}", font=self.app.font_regular, text_color="gray").pack(pady=(0, 30))
+        
+        ctk.CTkButton(parent, text="Vérifier les mises à jour", command=lambda: updater.manual_check_for_updates(self.app, window)).pack(pady=(0, 10))
+
+        # GitHub Link
+        github_url = f"https://github.com/{updater.GITHUB_REPO}"
+        github_link = ctk.CTkLabel(parent, text="Voir le projet sur GitHub", text_color="#3498db", cursor="hand2", font=self.app.font_bold)
+        github_link.pack(pady=10)
+        github_link.bind("<Button-1>", lambda e: webbrowser.open(github_url))
+
+        ctk.CTkLabel(parent, text="Développé par Sotarks.", font=ctk.CTkFont(size=11), text_color="gray").pack(pady=(20, 0))
+        ctk.CTkLabel(parent, text="© 2024-2026. Tous droits réservés.", font=ctk.CTkFont(size=10), text_color="gray").pack(side="bottom", pady=20)
 
     def _build_personalization_settings(self, parent):
         ctk.CTkButton(parent, text="Modifier les informations des PDF", font=self.app.font_button, command=self._open_pdf_settings_window, height=40).pack(fill="x", padx=20, pady=5)

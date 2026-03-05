@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 import threading
 from . import pin_manager
+from . import updater
 
 class LoginUI:
     def __init__(self, app):
@@ -107,6 +108,9 @@ class LoginUI:
             
         self.app.check_automatic_expenses()
         self.app.check_unpaid_invoices()
+        
+        # Vérification des mises à jour
+        updater.check_for_updates(self.app)
 
     def _on_numpad_press(self, digit):
         self.app.pin_entry.insert(ctk.END, digit)
