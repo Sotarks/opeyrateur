@@ -175,16 +175,25 @@ class InvoiceManager:
         """Masque les suggestions après un court délai pour permettre le clic."""
         def check_focus():
             if not self.app.winfo_exists(): return
-            focused_widget = self.app.focus_get()
-            parent = focused_widget
-            while parent:
-                if parent == self.app.patient_suggestion_frame: return
-                parent = parent.master if hasattr(parent, 'master') else None
+            try:
+                focused_widget = self.app.focus_get()
+                parent = focused_widget
+                while parent:
+                    if parent == self.app.patient_suggestion_frame: return
+                    parent = parent.master if hasattr(parent, 'master') else None
+            except Exception:
+                pass
             self.app.patient_suggestion_frame.grid_forget()
         self.app.after(150, check_focus)
 
     def valider(self):
         """Valide le formulaire, sauvegarde les données et génère le PDF."""
+        # Annuler les recherches/suggestions en cours
+        if self._patient_suggestion_job:
+            self.app.after_cancel(self._patient_suggestion_job)
+            self._patient_suggestion_job = None
+        self.app.patient_suggestion_frame.grid_forget()
+
         try:
             if not self.app.nom.get() or not self.app.montant.get():
                 messagebox.showwarning("Champs requis", "Veuillez remplir les champs Nom et Montant.")
