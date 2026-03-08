@@ -27,6 +27,8 @@ def load_dashboard_data(app):
                 expenses_df = pd.concat([expenses_df, expenses_prev], ignore_index=True)
 
         revenue_month, sessions_month, sessions_year, unpaid_total, expenses_month = 0.0, 0, 0, 0.0, 0.0
+        avg_session_price = 0.0
+        top_day = "-"
         
         # --- Chart Data ---
         chart_labels = []
@@ -54,10 +56,21 @@ def load_dashboard_data(app):
             
             # Répartition des prestations (Année en cours)
             if not yearly_invoices.empty:
-                prestation_dist = yearly_invoices['Prestation'].value_counts().head(5).to_dict()
+                prestation_dist = yearly_invoices['Prestation'].value_counts().to_dict()
             
             paid_monthly_invoices = paid_invoices_df[(paid_invoices_df['Date'].dt.year == now.year) & (paid_invoices_df['Date'].dt.month == now.month)]
             revenue_month = paid_monthly_invoices['Montant'].sum()
+
+            # Calcul Panier Moyen (Mois)
+            if sessions_month > 0:
+                avg_session_price = revenue_month / sessions_month
+            
+            # Calcul Jour Affluent (Année)
+            if not yearly_invoices.empty:
+                days_map = {0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 4: "Vendredi", 5: "Samedi", 6: "Dimanche"}
+                top_day_idx = yearly_invoices['Date'].dt.weekday.mode()
+                if not top_day_idx.empty:
+                    top_day = days_map.get(top_day_idx[0], "-")
 
             # Calculate last 6 months revenue & expenses for chart
             for i in range(5, -1, -1):
@@ -114,6 +127,8 @@ def load_dashboard_data(app):
             "sessions_year": sessions_year,
             "unpaid_total": unpaid_total,
             "expenses_month": expenses_month,
+            "avg_session_price": avg_session_price,
+            "top_day": top_day,
             "salary_metrics": {
                 "safe_salary": safe_salary,
                 "prov_taxes": prov_taxes,
@@ -142,6 +157,12 @@ def update_dashboard_views(app, data):
     # Gestion de la couleur pour les impayés
     unpaid_val = data['unpaid_total']
     app.kpi_unpaid_label.configure(text_color="#e74c3c" if unpaid_val > 0 else ("#1E1E1E", "#E0E0E0"))
+
+    # Mise à jour des nouveaux KPIs
+    if hasattr(app, 'kpi_avg_price_label'):
+        app.kpi_avg_price_label.configure(text=f"{data.get('avg_session_price', 0):.2f} €")
+    if hasattr(app, 'kpi_top_day_label'):
+        app.kpi_top_day_label.configure(text=data.get('top_day', '-'))
 
     # Mise à jour du Salaire Estimé
     if hasattr(app, 'kpi_salary_label'):
@@ -253,29 +274,29 @@ def _update_pie_chart(app, dist_data):
         bg_color = '#FFFFFF' if ctk.get_appearance_mode() == "Light" else '#2b2b2b'
         text_color = 'gray' if ctk.get_appearance_mode() == "Light" else 'white'
         
-        fig, ax = plt.subplots(figsize=(4, 2.5), dpi=100)
+        fig, ax = plt.subplots(figsize=(5, 2.5), dpi=100)
         fig.patch.set_facecolor(bg_color)
         
-        labels = list(dist_data.keys())
-        sizes = list(dist_data.values())
+        # Tri des données par pourcentage décroissant
+        sorted_items = sorted(dist_data.items(), key=lambda x: x[1], reverse=True)
+        labels = [k for k, v in sorted_items]
+        sizes = [v for k, v in sorted_items]
         
-        # Couleurs douces
-        colors = ['#3498db', '#2ecc71', '#9b59b6', '#f1c40f', '#e67e22']
+        # Couleurs Pastel (Bleu, Vert, Violet, Jaune, Orange, Rouge, etc.)
+        colors = ['#85C1E9', '#A9DFBF', '#D2B4DE', '#F9E79F', '#F5CBA7', '#F1948A', '#AED6F1', '#ABEBC6']
         
-        wedges, texts, autotexts = ax.pie(sizes, labels=None, autopct='%1.0f%%', startangle=90, colors=colors, pctdistance=0.85)
+        wedges, texts = ax.pie(sizes, labels=None, startangle=90, colors=colors)
         
-        # Style anneau (Donut)
-        centre_circle = plt.Circle((0,0), 0.70, fc=bg_color)
-        fig.gca().add_artist(centre_circle)
-        
-        # Style du texte
-        plt.setp(autotexts, size=8, weight="bold", color="white")
+        # Calcul des pourcentages pour la légende
+        total = sum(sizes)
+        legend_labels = [f"{label} ({size/total*100:.1f}%)" for label, size in zip(labels, sizes)]
         
         # Légende à droite
-        ax.legend(wedges, labels, title="Prestations", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1), frameon=False, fontsize=7)
+        ax.legend(wedges, legend_labels, title="Prestations", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1), frameon=False, fontsize=8)
         
+        plt.subplots_adjust(left=0.05, bottom=0.05, right=0.55, top=0.95)
         ax.axis('equal')  
-        plt.tight_layout()
+        # plt.tight_layout() # Désactivé pour utiliser subplots_adjust manuellement
         
         canvas = FigureCanvasTkAgg(fig, master=app.dashboard_pie_frame)
         canvas.draw()

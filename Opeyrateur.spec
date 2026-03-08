@@ -5,11 +5,11 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('src', 'src')],
-    hiddenimports=['fitz', 'PyMuPDF', 'babel.numbers'],
+    hiddenimports=['fitz', 'babel.numbers', 'babel.dates'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['AppKit', 'Foundation'],
     noarchive=False,
     optimize=0,
 )

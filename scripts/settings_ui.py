@@ -228,8 +228,8 @@ class SettingsUI:
         
         debug_btns = ctk.CTkFrame(parent, fg_color="transparent")
         debug_btns.pack(fill="x", padx=20)
-        ctk.CTkButton(debug_btns, text="Générer Factures Test", font=self.app.font_button, command=lambda: self._generate_random_invoices(debug_count_entry, settings_window), height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
-        ctk.CTkButton(debug_btns, text="Générer Frais Test", font=self.app.font_button, command=lambda: self._generate_random_expenses(debug_count_entry, settings_window), height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
+        ctk.CTkButton(debug_btns, text="Générer Factures Test", font=self.app.font_button, command=lambda: self._generate_random_invoices(debug_count_entry, window), height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(debug_btns, text="Générer Frais Test", font=self.app.font_button, command=lambda: self._generate_random_expenses(debug_count_entry, window), height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
     def _build_danger_settings(self, parent):
         ctk.CTkLabel(parent, text="Attention : Ces actions sont irréversibles.", font=self.app.font_bold, text_color="#e74c3c").pack(anchor="w", padx=20, pady=(0, 10))

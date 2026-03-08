@@ -116,11 +116,15 @@ def create_menu(app):
     create_kpi_card(content, 2, 0, "Total Impayés", "kpi_unpaid_label", "#e74c3c", "⚠️", "unpaid")
     create_kpi_card(content, 2, 1, "Dépenses (Mois)", "kpi_expenses_label", "#f39c12", "📉", "expenses_month")
 
+    # --- Nouveaux KPIs Stats ---
+    create_kpi_card(content, 3, 0, "Panier Moyen (Mois)", "kpi_avg_price_label", "#3498db", "🏷️")
+    create_kpi_card(content, 3, 1, "Jour Affluent (Année)", "kpi_top_day_label", "#9b59b6", "📅")
+
     # --- Section Santé Financière ---
-    ctk.CTkLabel(content, text="Santé Financière", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=3, column=0, columnspan=2, sticky="w", pady=(30, 10))
+    ctk.CTkLabel(content, text="Santé Financière", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=4, column=0, columnspan=2, sticky="w", pady=(30, 10))
 
     salary_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
-    salary_frame.grid(row=4, column=0, columnspan=2, padx=10, sticky="ew")
+    salary_frame.grid(row=5, column=0, columnspan=2, padx=10, sticky="ew")
     salary_frame.grid_columnconfigure(1, weight=1)
     
     # Icone & Titre
@@ -148,17 +152,17 @@ def create_menu(app):
     app.salary_progress_bar.set(0)
 
     # --- Graphiques (Ligne 5 & 6) ---
-    ctk.CTkLabel(content, text="Évolution Financière (6 mois)", font=ctk.CTkFont(family="Montserrat", size=18, weight="bold")).grid(row=5, column=0, sticky="w", pady=(30, 10), padx=10)
-    ctk.CTkLabel(content, text="Répartition des Actes (Année)", font=ctk.CTkFont(family="Montserrat", size=18, weight="bold")).grid(row=5, column=1, sticky="w", pady=(30, 10), padx=10)
+    ctk.CTkLabel(content, text="Évolution Financière (6 mois)", font=ctk.CTkFont(family="Montserrat", size=18, weight="bold")).grid(row=6, column=0, sticky="w", pady=(30, 10), padx=10)
+    ctk.CTkLabel(content, text="Répartition des Actes (Année)", font=ctk.CTkFont(family="Montserrat", size=18, weight="bold")).grid(row=6, column=1, sticky="w", pady=(30, 10), padx=10)
     
     app.dashboard_chart_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
-    app.dashboard_chart_frame.grid(row=6, column=0, padx=10, sticky="nsew")
+    app.dashboard_chart_frame.grid(row=7, column=0, padx=10, sticky="nsew")
 
     app.dashboard_pie_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
-    app.dashboard_pie_frame.grid(row=6, column=1, padx=10, sticky="nsew")
+    app.dashboard_pie_frame.grid(row=7, column=1, padx=10, sticky="nsew")
 
     # --- Dernières Factures ---
-    ctk.CTkLabel(content, text="Dernières Factures", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=7, column=0, columnspan=2, sticky="w", pady=(30, 10))
+    ctk.CTkLabel(content, text="Dernières Factures", font=ctk.CTkFont(family="Montserrat", size=20, weight="bold")).grid(row=8, column=0, columnspan=2, sticky="w", pady=(30, 10))
     
     app.dashboard_recent_invoices_frame = ctk.CTkFrame(content, corner_radius=15, fg_color=("white", "gray20"), border_width=2, border_color=("gray90", "gray20"))
-    app.dashboard_recent_invoices_frame.grid(row=8, column=0, columnspan=2, padx=10, sticky="ew")
+    app.dashboard_recent_invoices_frame.grid(row=9, column=0, columnspan=2, padx=10, sticky="ew")

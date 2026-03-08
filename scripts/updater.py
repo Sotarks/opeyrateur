@@ -1,4 +1,6 @@
-import requests
+import urllib.request
+import urllib.error
+import json
 import os
 import sys
 import webbrowser
@@ -10,7 +12,7 @@ from packaging.version import parse as parse_version
 
 # --- Configuration ---
 # Cette version doit être mise à jour manuellement à chaque nouvelle release.
-APP_VERSION = "1.0.2" # Exemple, à incrémenter pour chaque release
+APP_VERSION = "1.0.4" 
 GITHUB_REPO = "Sotarks/opeyrateur"
 API_HEADERS = {
     'User-Agent': 'Opeyrateur-App-Updater/1.0',
@@ -31,9 +33,9 @@ def check_for_updates(app_instance):
     def _worker():
         try:
             releases_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
-            response = requests.get(releases_url, timeout=10, headers=API_HEADERS)
-            response.raise_for_status()
-            releases = response.json()
+            req = urllib.request.Request(releases_url, headers=API_HEADERS)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                releases = json.loads(response.read().decode("utf-8"))
 
             if not releases:
                 print("Vérification de mise à jour : Aucune release trouvée.")
@@ -52,12 +54,12 @@ def check_for_updates(app_instance):
             except parse_version.InvalidVersion:
                 print(f"Tag de release invalide sur GitHub : '{latest_version_str}'. La comparaison de version est impossible.")
 
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
                 print(f"Erreur 404 lors de la vérification auto : Dépôt '{GITHUB_REPO}' introuvable ou privé.")
             else:
                 print(f"Erreur HTTP lors de la vérification de mise à jour : {e}")
-        except requests.exceptions.RequestException as e:
+        except urllib.error.URLError as e:
             print(f"La vérification de mise à jour a échoué : {e}")  # Log silencieux
         except Exception as e:
             print(f"Erreur lors du traitement des données de mise à jour : {e}")
@@ -74,10 +76,26 @@ def manual_check_for_updates(app_instance, parent_window):
 
     def _worker():
         try:
-            releases_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
-            response = requests.get(releases_url, timeout=10, headers=API_HEADERS)
-            response.raise_for_status()
-            releases = response.json()
+            # --- MODE TEST LOCAL ---
+            # Mettez à True pour tester. Assurez-vous que TEST_PATH pointe vers un .exe valide.
+            TEST_MODE = False
+            TEST_PATH = r"C:\REPO\opeyrateur\dist\Opeyrateur.exe" 
+
+            if TEST_MODE:
+                import pathlib
+                releases = [{
+                    "tag_name": "v9.9.9", # Version fictive supérieure
+                    "body": "Test de mise à jour locale.\nCeci est une simulation.",
+                    "assets": [{
+                        "name": get_executable_name(), # Le nom doit correspondre à l'exe actuel
+                        "browser_download_url": pathlib.Path(TEST_PATH).as_uri()
+                    }]
+                }]
+            else:
+                releases_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
+                req = urllib.request.Request(releases_url, headers=API_HEADERS)
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    releases = json.loads(response.read().decode("utf-8"))
 
             if not releases:
                 if app_instance.winfo_exists():
@@ -111,8 +129,8 @@ def manual_check_for_updates(app_instance, parent_window):
                 if app_instance.winfo_exists():
                     app_instance.after(0, lambda: messagebox.showinfo("Mise à jour", "Vous utilisez déjà la version la plus récente.", parent=parent_window))
         
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
                 error_message = (
                     "La ressource est introuvable (Erreur 404).\n\n"
                     "Causes possibles :\n"
@@ -127,7 +145,7 @@ def manual_check_for_updates(app_instance, parent_window):
                     app_instance.after(0, lambda e=e: messagebox.showerror(
                         "Erreur de mise à jour", f"Impossible de vérifier les mises à jour (Erreur HTTP) :\n{e}", parent=parent_window
                     ))
-        except requests.exceptions.RequestException as e:
+        except urllib.error.URLError as e:
             if app_instance.winfo_exists():
                 app_instance.after(0, lambda e=e: messagebox.showerror(
                     "Erreur de mise à jour", f"Impossible de vérifier les mises à jour :\n{e}", parent=parent_window
@@ -210,10 +228,9 @@ def start_update(app_instance, release_info, parent_dialog):
 
     def _download_worker():
         try:
-            response = requests.get(download_url, stream=True, timeout=60)
-            response.raise_for_status()
-            
-            total_length = response.headers.get('content-length')
+            req = urllib.request.Request(download_url, headers={'User-Agent': API_HEADERS['User-Agent']})
+            response = urllib.request.urlopen(req, timeout=60)
+            total_length = response.getheader('Content-Length')
 
             if total_length is None: # Pas d'en-tête content-length
                 progress_bar.configure(mode="indeterminate")
@@ -232,16 +249,20 @@ def start_update(app_instance, release_info, parent_dialog):
                     progress_label.configure(text=f"{int(progress * 100)}% ({downloaded_mb:.1f} / {total_mb:.1f} MB)")
 
             with open(new_exe_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk: # Filtre les chunks vides (keep-alive)
-                        downloaded_length += len(chunk)
-                        f.write(chunk)
-                        if total_length:
-                            progress = downloaded_length / total_length
-                            downloaded_mb = downloaded_length / (1024 * 1024)
-                            total_mb = total_length / (1024 * 1024)
-                            # Planifie la mise à jour de l'UI dans le thread principal
-                            app_instance.after(0, lambda p=progress, d_mb=downloaded_mb, t_mb=total_mb: update_progress(p, d_mb, t_mb))
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
+                    downloaded_length += len(chunk)
+                    f.write(chunk)
+                    if total_length:
+                        progress = downloaded_length / total_length
+                        downloaded_mb = downloaded_length / (1024 * 1024)
+                        total_mb = total_length / (1024 * 1024)
+                        # Planifie la mise à jour de l'UI dans le thread principal
+                        app_instance.after(0, lambda p=progress, d_mb=downloaded_mb, t_mb=total_mb: update_progress(p, d_mb, t_mb))
+            
+            response.close()
             
             if progress_win.winfo_exists():
                 app_instance.after(0, lambda: (
@@ -259,6 +280,7 @@ def start_update(app_instance, release_info, parent_dialog):
                 f.write(f'echo Remplacement des fichiers...\n')
                 f.write(f'move /Y "{new_exe_path}" "{sys.executable}"\n')
                 f.write(f'echo Lancement de la nouvelle version...\n')
+                f.write(f'set _MEIPASS2=\n')
                 f.write(f'start "" "{sys.executable}"\n')
                 f.write(f'(goto) 2>nul & del "%~f0"\n') # Auto-suppression
 

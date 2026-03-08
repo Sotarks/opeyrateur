@@ -164,7 +164,7 @@ def create_budget_tab(app):
     # =================================================================================
     # 2. MAIN CONTENT (DROITE) - Graphique
     # =================================================================================
-    main_content = ctk.CTkFrame(app.budget_tab, corner_radius=0, fg_color="transparent")
+    main_content = ctk.CTkScrollableFrame(app.budget_tab, corner_radius=0, fg_color="transparent")
     main_content.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
     main_content.grid_columnconfigure(0, weight=1)
     main_content.grid_rowconfigure(1, weight=2) # Le graphique prend plus de place
@@ -177,7 +177,7 @@ def create_budget_tab(app):
 
     ctk.CTkLabel(main_content, text="Répartition par Prestation", font=app.font_title, text_color="#3498db").grid(row=2, column=0, sticky="w", pady=(20, 15))
 
-    app.breakdown_frame = ctk.CTkScrollableFrame(main_content, corner_radius=15, fg_color=("white", "gray20"), orientation="vertical")
+    app.breakdown_frame = ctk.CTkFrame(main_content, corner_radius=15, fg_color=("white", "gray20"))
     app.breakdown_frame.grid(row=3, column=0, sticky="nsew")
 
     # Initialisation de l'affichage

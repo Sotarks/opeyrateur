@@ -436,7 +436,7 @@ class App(ctk.CTk):
         
         if wrapper == self.new_invoice_wrapper:
             # Place le curseur dans le champ Prénom après un court délai
-            self.after(100, lambda: self.prenom.focus_set())
+            self.after(100, lambda: self.prenom.focus_set() if self.prenom.winfo_exists() else None)
             
         elif wrapper == self.search_wrapper and not self.is_search_tab_initialized:
             from .search_tab import create_search_tab
