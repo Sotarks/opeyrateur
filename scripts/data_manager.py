@@ -86,7 +86,11 @@ def get_next_sequence_id(year):
     
     existing_seqs = set()
     try:
-        all_sheets = pd.read_excel(excel_path, sheet_name=None)
+        # OPTIMISATION : Utilise le cache de fichier pour éviter de relire le disque inutilement.
+        all_sheets = _load_excel_file_cached(excel_path)
+        if all_sheets is None:
+            # Si le fichier existe mais est illisible, fallback.
+            return get_yearly_invoice_count(year) + 1
         for df in all_sheets.values():
             if 'SequenceID' in df.columns:
                 # On convertit en numérique et on ignore les erreurs/vides

@@ -1,6 +1,7 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from datetime import datetime
+import threading
 from .data_manager import get_next_sequence_id, save_to_excel, check_duplicate_invoice
 
 class InvoiceManager:
@@ -8,6 +9,7 @@ class InvoiceManager:
         self.app = app
         self.family_member_entries = []
         self._patient_suggestion_job = None # Pour dé-bouncer la recherche
+        self.is_saving = False # Flag pour éviter les sauvegardes concurrentes
 
     def add_family_member(self):
         """Ajoute une ligne de saisie pour un membre de la famille."""
@@ -100,6 +102,7 @@ class InvoiceManager:
     def _perform_patient_search(self):
         """Exécute la recherche de patients et met à jour l'interface."""
         import pandas as pd
+        from datetime import datetime
 
         query_prenom = self.app.prenom.get().lower().strip()
         query_nom = self.app.nom.get().lower().strip()
@@ -108,7 +111,14 @@ class InvoiceManager:
             self.app.patient_suggestion_frame.grid_forget()
             return
 
-        df = self.app._load_data_with_cache()
+        # --- OPTIMISATION : Ne charger que les 2 dernières années pour les suggestions ---
+        now = datetime.now()
+        df_current_year = self.app._load_data_with_cache(year=now.year)
+        df_prev_year = self.app._load_data_with_cache(year=now.year - 1)
+        
+        df = pd.concat([df_current_year, df_prev_year], ignore_index=True)
+        # df = self.app._load_data_with_cache() # Ancien code, trop lent
+
         if df.empty: return
 
         # Crée une liste unique de patients, en privilégiant les infos les plus récentes
@@ -190,6 +200,10 @@ class InvoiceManager:
 
     def valider(self):
         """Valide le formulaire, sauvegarde les données et génère le PDF."""
+        if self.is_saving:
+            messagebox.showinfo("Veuillez patienter", "Une facture est déjà en cours de sauvegarde en arrière-plan.")
+            return
+
         # Annuler les recherches/suggestions en cours
         if self._patient_suggestion_job:
             self.app.after_cancel(self._patient_suggestion_job)
@@ -197,6 +211,7 @@ class InvoiceManager:
         self.app.patient_suggestion_frame.grid_forget()
 
         try:
+            # --- Validation des champs ---
             if not self.app.nom.get() or not self.app.montant.get():
                 messagebox.showwarning("Champs requis", "Veuillez remplir les champs Nom et Montant.")
                 return
@@ -229,6 +244,7 @@ class InvoiceManager:
                 if not messagebox.askyesno("Doublon détecté", f"Une facture pour {check_data['Prenom']} {check_data['Nom']} d'un montant de {check_data['Montant']} € existe déjà à la date du {check_data['Date']}.\n\nVoulez-vous vraiment créer cette facture ?"):
                     return
 
+            # --- Préparation des données ---
             invoice_year = reference_date.year
             next_seq = get_next_sequence_id(invoice_year)
             sequence_id = f"{next_seq:04d}"
@@ -287,19 +303,50 @@ class InvoiceManager:
                     data["Prenom2"] = prenom2
                     data["Nom2"] = nom2
 
-            self.app._invalidate_data_cache()
-            save_to_excel(data)
+            # --- Logique de sauvegarde asynchrone ---
+            self.is_saving = True
+            self.app.btn.configure(state="disabled", text="Sauvegarde en cours...")
+            self.app.update_idletasks()
+
+            # 1. Générer le PDF (rapide, pour l'utilisateur)
             from .pdf_generator import generate_pdf
             pdf_file = generate_pdf(data)
+
+            # 2. Afficher le succès et réinitialiser le formulaire
             self.app.invoice_actions.show_success_dialog(pdf_file, data)
-            
-            # Réinitialise le formulaire pour la prochaine saisie.
-            # La méthode reset_form s'occupe de vider tous les champs (y compris enfant, famille, etc.)
             self.reset_form(confirm=False)
+
+            # 3. Lancer la sauvegarde Excel en arrière-plan (lent)
+            thread = threading.Thread(target=self._save_worker, args=(data,), daemon=True)
+            thread.start()
+
         except ValueError:
             messagebox.showerror("Erreur de format", "Le montant doit être un nombre valide.")
+            self._on_save_complete(False, "") # Réactive le bouton en cas d'erreur
         except Exception as e:
             messagebox.showerror("Erreur inattendue", f"Une erreur est survenue : {e}")
+            self._on_save_complete(False, "") # Réactive le bouton en cas d'erreur
+
+    def _save_worker(self, data):
+        """Worker thread pour la sauvegarde Excel afin de ne pas bloquer l'UI."""
+        try:
+            save_to_excel(data)
+            self.app._invalidate_data_cache()
+            self.app.after(0, self._on_save_complete, True, "Facture enregistrée dans le registre.")
+        except Exception as e:
+            error_message = f"Erreur lors de la sauvegarde Excel : {e}"
+            print(error_message)
+            self.app.after(0, self._on_save_complete, False, error_message)
+
+    def _on_save_complete(self, success, message):
+        """Callback exécuté sur le thread principal après la fin de la sauvegarde."""
+        self.is_saving = False
+        self.app.btn.configure(state="normal", text="VALIDER LA FACTURE")
+        if success:
+            self.app._show_status_message(message, duration=5000)
+            self.app._update_dashboard_kpis() # Met à jour les stats
+        elif message: # Affiche une erreur seulement si un message a été passé
+            messagebox.showerror("Erreur de Sauvegarde", f"Le PDF a été créé, mais la sauvegarde dans le registre a échoué.\n\n{message}\n\nIl est conseillé de vérifier le fichier Excel et de le régénérer via les réglages si besoin.")
 
     def reset_form(self, confirm=True):
         """Vide tous les champs du formulaire."""

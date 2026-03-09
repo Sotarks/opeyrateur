@@ -12,7 +12,7 @@ from packaging.version import parse as parse_version
 
 # --- Configuration ---
 # Cette version doit être mise à jour manuellement à chaque nouvelle release.
-APP_VERSION = "1.0.4" 
+APP_VERSION = "1.0.5" 
 GITHUB_REPO = "Sotarks/opeyrateur"
 API_HEADERS = {
     'User-Agent': 'Opeyrateur-App-Updater/1.0',

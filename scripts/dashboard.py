@@ -222,6 +222,11 @@ def _update_main_chart(app, chart_data):
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     
+    # --- OPTIMISATION : Vérifie si les données du graphique ont changé ---
+    if app.dashboard_chart_data_cache == chart_data:
+        return # Ne redessine pas si les données sont identiques
+    app.dashboard_chart_data_cache = chart_data
+
     for widget in app.dashboard_chart_frame.winfo_children():
         widget.destroy()
 
@@ -263,12 +268,19 @@ def _update_pie_chart(app, dist_data):
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     
+    # --- OPTIMISATION : Vérifie si les données du camembert ont changé ---
+    if app.dashboard_pie_data_cache == dist_data:
+        return # Ne redessine pas si les données sont identiques
+
     for widget in app.dashboard_pie_frame.winfo_children():
         widget.destroy()
         
     if not dist_data:
+        app.dashboard_pie_data_cache = dist_data # Cache le fait qu'il n'y a pas de données
         ctk.CTkLabel(app.dashboard_pie_frame, text="Pas assez de données", text_color="gray").pack(pady=20)
         return
+
+    app.dashboard_pie_data_cache = dist_data
 
     try:
         bg_color = '#FFFFFF' if ctk.get_appearance_mode() == "Light" else '#2b2b2b'

@@ -129,6 +129,8 @@ class App(ctk.CTk):
         # --- Caches pour la performance ---
         self.data_cache = {}
         self.current_search_results_df = None
+        self.dashboard_chart_data_cache = None
+        self.dashboard_pie_data_cache = None
         self._search_job = None # Pour dé-bouncer la recherche principale
 
         # Assure que la configuration du PIN existe
