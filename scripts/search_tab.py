@@ -75,6 +75,10 @@ def create_search_tab(app):
     app.reset_button = ctk.CTkButton(search_card, text="Réinitialiser", command=app._reset_filters, fg_color="gray50", hover_color="gray30", font=app.font_button, height=30)
     app.reset_button.pack(fill="x", padx=15, pady=(0, 15))
 
+    # Bouton Envoi Groupé
+    app.bulk_email_button = ctk.CTkButton(sidebar, text="✉️ Envoyer la sélection", command=lambda: app.invoice_actions.send_grouped_email(app.selected_invoices_vars), fg_color="#3498db", hover_color="#2980b9", font=app.font_button, height=40)
+    app.bulk_email_button.pack(fill="x", padx=20, pady=(0, 10))
+
     # Bouton Export (Sidebar)
     app.export_button = ctk.CTkButton(sidebar, text="Exporter en Excel", command=app._export_search_results, fg_color="#34D399", hover_color="#10B981", font=app.font_button, height=40)
     app.export_button.pack(fill="x", padx=20, pady=(0, 10))

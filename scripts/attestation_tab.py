@@ -128,6 +128,7 @@ def refresh_attestation_history(app):
         btn_frame = ctk.CTkFrame(row, fg_color="transparent")
         btn_frame.pack(side="right")
         
+        ctk.CTkButton(btn_frame, text="✉️", width=40, height=30, fg_color="#3498db", hover_color="#2980b9", command=lambda f=filepath: app.invoice_actions._prompt_send_email(pdf_path=f)).pack(side="left", padx=5)
         ctk.CTkButton(btn_frame, text="Ouvrir", width=80, height=30, command=lambda f=filepath: _open_attestation(app, f)).pack(side="left", padx=5)
         ctk.CTkButton(btn_frame, text="Dossier", width=80, height=30, fg_color="gray50", hover_color="gray30", command=lambda f=filepath: os.startfile(os.path.dirname(f))).pack(side="left", padx=5)
 

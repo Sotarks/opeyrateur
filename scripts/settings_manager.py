@@ -59,6 +59,12 @@ DEFAULT_SETTINGS = {
             "5": "10:00-17:00", # Samedi
             "6": ""             # Dimanche (Off)
         })
+    },
+    'Email': {
+        'sender_email': "alaispeyrat.psychologue@gmail.com",
+        'sender_password': "nhet jtva gnxs esbx", # Mot de passe d'application requis pour Gmail
+        'smtp_server': "smtp.gmail.com",
+        'smtp_port': "587"
     }
 }
 
@@ -241,6 +247,34 @@ def save_working_hours(data):
     if not parser.has_section('Agenda'):
         parser.add_section('Agenda')
     parser.set('Agenda', 'work_hours', json.dumps(data))
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
+        parser.write(configfile)
+    _invalidate_caches()
+
+def get_email_config():
+    """Récupère la configuration email."""
+    setup_default_settings()
+    parser = _get_parser()
+    
+    # Utilise le mot de passe par défaut si celui du fichier est vide
+    pwd = parser.get('Email', 'sender_password', fallback="")
+    if not pwd:
+        pwd = "nhet jtva gnxs esbx"
+        
+    return {
+        'sender_email': parser.get('Email', 'sender_email', fallback="alaispeyrat.psychologue@gmail.com"),
+        'sender_password': pwd,
+        'smtp_server': parser.get('Email', 'smtp_server', fallback="smtp.gmail.com"),
+        'smtp_port': parser.get('Email', 'smtp_port', fallback="587")
+    }
+
+def save_email_config(data):
+    """Sauvegarde la configuration email."""
+    parser = _get_parser()
+    if not parser.has_section('Email'):
+        parser.add_section('Email')
+    for key, value in data.items():
+        parser.set('Email', key, str(value))
     with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:
         parser.write(configfile)
     _invalidate_caches()

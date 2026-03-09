@@ -148,6 +148,7 @@ class SettingsUI:
     def _build_personalization_settings(self, parent):
         ctk.CTkButton(parent, text="Modifier les informations des PDF", font=self.app.font_button, command=self._open_pdf_settings_window, height=40).pack(fill="x", padx=20, pady=5)
         ctk.CTkButton(parent, text="Changer le code PIN", font=self.app.font_button, command=self._open_change_pin_window, height=40).pack(fill="x", padx=20, pady=5)
+        ctk.CTkButton(parent, text="Configurer l'envoi d'Email", font=self.app.font_button, command=self._open_email_settings_window, height=40).pack(fill="x", padx=20, pady=5)
         ctk.CTkButton(parent, text="Configurer les horaires de travail", font=self.app.font_button, command=self._open_work_hours_window, height=40).pack(fill="x", padx=20, pady=5)
         
         # Zoom UI
@@ -495,6 +496,44 @@ class SettingsUI:
             window.destroy()
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible d'enregistrer les informations:\n{e}", parent=window)
+
+    def _open_email_settings_window(self):
+        """Ouvre la fenêtre de configuration email."""
+        email_config = settings_manager.get_email_config()
+        win = ctk.CTkToplevel(self.app)
+        win.title("Configuration Email")
+        win.geometry("500x450")
+        win.transient(self.app)
+        win.grab_set()
+
+        ctk.CTkLabel(win, text="Configuration SMTP (Gmail)", font=self.app.font_large).pack(pady=(20, 10))
+        
+        ctk.CTkLabel(win, text="Votre adresse email :").pack(anchor="w", padx=20)
+        email_entry = ctk.CTkEntry(win)
+        email_entry.pack(fill="x", padx=20, pady=(0, 10))
+        email_entry.insert(0, email_config.get('sender_email', ''))
+
+        ctk.CTkLabel(win, text="Mot de passe d'application :").pack(anchor="w", padx=20)
+        pwd_entry = ctk.CTkEntry(win, show="*")
+        pwd_entry.pack(fill="x", padx=20, pady=(0, 5))
+        pwd_entry.insert(0, email_config.get('sender_password', ''))
+        
+        help_text = "Note pour Gmail : Vous devez utiliser un 'Mot de passe d'application'\net non votre mot de passe habituel.\n\n1. Activez la validation en deux étapes sur votre compte Google.\n2. Allez dans Sécurité > Mots de passe d'application.\n3. Générez un mot de passe et collez-le ici."
+        ctk.CTkLabel(win, text=help_text, font=ctk.CTkFont(size=11), text_color="gray", justify="left").pack(padx=20, pady=(0, 20), anchor="w")
+
+        def save():
+            data = {
+                'sender_email': email_entry.get().strip(),
+                'sender_password': pwd_entry.get().strip(),
+                'smtp_server': 'smtp.gmail.com', # Fixé pour Gmail pour simplifier
+                'smtp_port': '587'
+            }
+            settings_manager.save_email_config(data)
+            messagebox.showinfo("Succès", "Configuration email enregistrée.", parent=win)
+            win.destroy()
+
+        ctk.CTkButton(win, text="Enregistrer", command=save, font=self.app.font_button).pack(pady=10)
+
 
     def _open_change_pin_window(self):
         pin_window = ctk.CTkToplevel(self.app)

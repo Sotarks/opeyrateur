@@ -5,9 +5,10 @@ import os
 import ast
 from datetime import datetime
 import webbrowser
+import threading
 
 from . import config
-from .data_manager import get_invoice_path, delete_invoice, MONTHS_FR, backup_database, save_to_excel
+from .data_manager import get_invoice_path, delete_invoice, MONTHS_FR, backup_database, save_to_excel, mark_invoices_as_sent
 
 class InvoiceActions:
     def __init__(self, app):
@@ -18,6 +19,7 @@ class InvoiceActions:
         menu = tk.Menu(self.app, tearoff=0)
         menu.add_command(label="Visualiser le PDF", command=lambda: self.view_invoice_pdf(invoice_data))
         menu.add_command(label="Modifier la facture", command=lambda: self.open_modify_window(invoice_data))
+        menu.add_command(label="Envoyer par Email", command=lambda: self._prompt_send_email(invoice_data=invoice_data))
         menu.add_command(label="Ouvrir le dossier", command=lambda: self.open_invoice_folder(invoice_data))
         menu.add_command(label="Ouvrir le PDF (externe)", command=lambda: self.open_invoice_pdf_externally(invoice_data))
         menu.add_separator()
@@ -306,6 +308,103 @@ class InvoiceActions:
             try: os.remove(old_path)
             except Exception as e: print(f"Erreur suppression ancien PDF: {e}")
 
+    def send_grouped_email(self, selected_vars):
+        """Prépare l'envoi groupé pour les factures sélectionnées."""
+        selected_invoices = []
+        for inv_id, (var, data) in selected_vars.items():
+            if var.get():
+                selected_invoices.append(data)
+        
+        if not selected_invoices:
+            messagebox.showinfo("Info", "Veuillez sélectionner au moins une facture.")
+            return
+            
+        self._prompt_send_email(invoice_data_list=selected_invoices)
+
+    def _prompt_send_email(self, invoice_data=None, pdf_path=None, email_subject=None, invoice_data_list=None):
+        """Ouvre une boîte de dialogue pour envoyer la facture par email."""
+        pdf_paths = []
+        target_invoices = []
+
+        if invoice_data_list:
+            target_invoices = invoice_data_list
+            for inv in invoice_data_list:
+                path = get_invoice_path(inv)
+                if path and os.path.exists(path):
+                    pdf_paths.append(path)
+        elif invoice_data:
+            target_invoices = [invoice_data]
+            path = pdf_path if pdf_path else get_invoice_path(invoice_data)
+            if path and os.path.exists(path): pdf_paths.append(path)
+        
+        if not pdf_paths:
+            messagebox.showerror("Erreur", "Aucun fichier PDF valide trouvé.")
+            return
+
+        # Dialog to ask for email
+        dialog = ctk.CTkToplevel(self.app)
+        dialog.title("Envoyer par Email")
+        dialog.geometry("500x450")
+        dialog.transient(self.app)
+        dialog.grab_set()
+        
+        ctk.CTkLabel(dialog, text="Adresse email du destinataire :").pack(pady=(20, 5))
+        email_entry = ctk.CTkEntry(dialog, width=400)
+        email_entry.pack(pady=5)
+        email_entry.focus()
+        
+        ctk.CTkLabel(dialog, text="Message :").pack(pady=(10, 5))
+        body_entry = ctk.CTkTextbox(dialog, width=400, height=150)
+        body_entry.pack(pady=5)
+        
+        # Détermine le sujet et le corps par défaut
+        if len(pdf_paths) > 1:
+            default_subject = f"Vos documents ({len(pdf_paths)})"
+            default_body = "Bonjour,\n\nVeuillez trouver ci-joint vos documents.\n\nCordialement,\nAlaïs Peyrat"
+        else:
+            filename = os.path.basename(pdf_paths[0])
+            is_attestation = "ATTESTATION" in filename.upper()
+            
+            if is_attestation:
+                default_subject = f"Attestation - {filename}"
+                default_body = "Bonjour,\n\nVeuillez trouver ci-joint votre attestation.\n\nCordialement,\nAlaïs Peyrat"
+            else:
+                default_subject = f"Facture - {filename}"
+                default_body = "Bonjour,\n\nVeuillez trouver ci-joint votre facture.\n\nCordialement,\nAlaïs Peyrat"
+
+        if email_subject: default_subject = email_subject
+
+        body_entry.insert("1.0", default_body)
+        
+        def send():
+            recipient = email_entry.get().strip()
+            body_text = body_entry.get("1.0", "end-1c")
+            if not recipient: return
+            
+            dialog.destroy()
+            self.app._show_status_message("Envoi de l'email en cours...")
+            
+            from . import email_manager
+            subject = default_subject
+            
+            def _send_thread():
+                success, msg = email_manager.send_email_with_attachments(recipient, subject, body_text, pdf_paths)
+                
+                def on_complete():
+                    if success:
+                        mark_invoices_as_sent(target_invoices)
+                        self.app._invalidate_data_cache()
+                        self.app._apply_filters_and_search() # Rafraîchir pour voir la date d'envoi
+                        messagebox.showinfo("Email", msg)
+                    else:
+                        messagebox.showerror("Erreur Email", msg)
+                
+                self.app.after(0, on_complete)
+                
+            threading.Thread(target=_send_thread, daemon=True).start()
+
+        ctk.CTkButton(dialog, text="Envoyer", command=send).pack(pady=20)
+
     def show_success_dialog(self, pdf_path, invoice_data=None):
         """Affiche une boîte de dialogue de succès."""
         dialog = ctk.CTkToplevel(self.app)
@@ -326,6 +425,7 @@ class InvoiceActions:
         ctk.CTkButton(btn_frame, text="📂  Ouvrir l'emplacement", command=lambda: os.startfile(os.path.dirname(pdf_path)), fg_color="#34D399", hover_color="#10B981", height=40, font=self.app.font_button).pack(pady=8, fill="x")
         ctk.CTkButton(btn_frame, text="📄  Visualiser le PDF", command=open_pdf, height=40, font=self.app.font_button).pack(pady=8, fill="x")
         ctk.CTkButton(btn_frame, text="🖨️  Imprimer", command=lambda: os.startfile(pdf_path, "print"), fg_color="transparent", border_width=1, text_color=("#1E1E1E", "#E0E0E0"), height=40, font=self.app.font_button).pack(pady=8, fill="x")
+        ctk.CTkButton(btn_frame, text="✉️  Envoyer par Email", command=lambda: self._prompt_send_email(pdf_path=pdf_path), fg_color="#3498db", hover_color="#2980b9", height=40, font=self.app.font_button).pack(pady=8, fill="x")
         ctk.CTkButton(btn_frame, text="📅  Ouvrir Doctolib", command=lambda: webbrowser.open("https://pro.doctolib.fr/patient_messaging"), fg_color="transparent", border_width=1, text_color=("#1E1E1E", "#E0E0E0"), height=40, font=self.app.font_button).pack(pady=8, fill="x")
         
         if invoice_data:

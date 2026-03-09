@@ -9,10 +9,11 @@ import customtkinter as ctk
 import threading
 import subprocess
 from packaging.version import parse as parse_version
+import ssl
 
 # --- Configuration ---
 # Cette version doit être mise à jour manuellement à chaque nouvelle release.
-APP_VERSION = "1.0.5" 
+APP_VERSION = "1.0.8" 
 GITHUB_REPO = "Sotarks/opeyrateur"
 API_HEADERS = {
     'User-Agent': 'Opeyrateur-App-Updater/1.0',
@@ -34,7 +35,8 @@ def check_for_updates(app_instance):
         try:
             releases_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
             req = urllib.request.Request(releases_url, headers=API_HEADERS)
-            with urllib.request.urlopen(req, timeout=10) as response:
+            # Utilisation d'un contexte SSL non vérifié pour éviter les erreurs de certificats locaux manquants
+            with urllib.request.urlopen(req, timeout=10, context=ssl._create_unverified_context()) as response:
                 releases = json.loads(response.read().decode("utf-8"))
 
             if not releases:
@@ -94,7 +96,7 @@ def manual_check_for_updates(app_instance, parent_window):
             else:
                 releases_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
                 req = urllib.request.Request(releases_url, headers=API_HEADERS)
-                with urllib.request.urlopen(req, timeout=10) as response:
+                with urllib.request.urlopen(req, timeout=10, context=ssl._create_unverified_context()) as response:
                     releases = json.loads(response.read().decode("utf-8"))
 
             if not releases:
@@ -229,7 +231,7 @@ def start_update(app_instance, release_info, parent_dialog):
     def _download_worker():
         try:
             req = urllib.request.Request(download_url, headers={'User-Agent': API_HEADERS['User-Agent']})
-            response = urllib.request.urlopen(req, timeout=60)
+            response = urllib.request.urlopen(req, timeout=60, context=ssl._create_unverified_context())
             total_length = response.getheader('Content-Length')
 
             if total_length is None: # Pas d'en-tête content-length

@@ -132,6 +132,7 @@ class App(ctk.CTk):
         self.dashboard_chart_data_cache = None
         self.dashboard_pie_data_cache = None
         self._search_job = None # Pour dé-bouncer la recherche principale
+        self.selected_invoices_vars = {} # Stocke les variables des checkboxes {invoice_id: BooleanVar}
 
         # Assure que la configuration du PIN existe
         pin_manager.setup_pin_if_needed()
@@ -276,6 +277,7 @@ class App(ctk.CTk):
     def _display_invoices_in_frame(self, dataframe, label):
         """Vide et remplit le cadre de résultats avec les factures d'un dataframe."""
         import pandas as pd
+        self.selected_invoices_vars = {} # Reset selection
         self.current_search_results_df = dataframe
         
         for widget in self.results_frame.winfo_children():
@@ -315,7 +317,7 @@ class App(ctk.CTk):
             invoice_frame = ctk.CTkFrame(self.results_frame, corner_radius=8, fg_color=("white", "gray20"), border_width=1, border_color=("gray90", "gray30"))
             invoice_frame.pack(fill="x", pady=(0, 2), padx=5)
             
-            invoice_frame.grid_columnconfigure(2, weight=1) # La colonne détails s'étend pour pousser le reste à droite
+            invoice_frame.grid_columnconfigure(3, weight=1) # La colonne détails s'étend
             
             patient_name = f"{row.get('Prenom', '')} {row.get('Nom', '')}"
             nom_enfant = row.get('Nom_Enfant', '')
@@ -328,26 +330,46 @@ class App(ctk.CTk):
             if payment_status == "Impayé": status_color = "#e74c3c"
             elif payment_status != "N/A": status_color = "#2ecc71"
             
-            # 1. Barre de statut (Gauche)
+            # 0. Checkbox de sélection
+            row_data = row.to_dict()
+            chk_var = ctk.BooleanVar()
+            self.selected_invoices_vars[row.get('ID')] = (chk_var, row_data)
+            chk = ctk.CTkCheckBox(invoice_frame, text="", variable=chk_var, width=24, height=24, corner_radius=4)
+            chk.grid(row=0, column=0, padx=(10, 5), pady=2)
+
+            # 1. Barre de statut
             status_strip = ctk.CTkFrame(invoice_frame, width=5, fg_color=status_color, corner_radius=0)
-            status_strip.grid(row=0, column=0, sticky="ns", padx=(0, 10))
+            status_strip.grid(row=0, column=1, sticky="ns", padx=(0, 10))
 
             # 2. Nom Patient
             name_label = ctk.CTkLabel(invoice_frame, text=patient_name, font=ctk.CTkFont(family="Montserrat", size=13, weight="bold"), anchor="w")
-            name_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=2)
+            name_label.grid(row=0, column=2, sticky="w", padx=(0, 10), pady=2)
             
             # 3. Détails (Date - Prestation)
             details_text = f"#{row.get('ID', '')}  |  {row['Date']}  |  {row.get('Prestation', 'Consultation')}"
             details_label = ctk.CTkLabel(invoice_frame, text=details_text, font=ctk.CTkFont(family="Montserrat", size=12), text_color="gray", anchor="w")
-            details_label.grid(row=0, column=2, sticky="w", pady=2)
+            details_label.grid(row=0, column=3, sticky="w", pady=2)
+            
+            # 3b. Info "Envoyé le"
+            sent_date = row.get('Date_Envoi_Email')
+            if pd.notna(sent_date) and str(sent_date).strip():
+                sent_label = ctk.CTkLabel(invoice_frame, text=f"Envoyé le {sent_date}", font=ctk.CTkFont(size=10), text_color="#3498db")
+                sent_label.grid(row=0, column=4, padx=10)
+            else:
+                # Placeholder vide pour alignement
+                ctk.CTkLabel(invoice_frame, text="").grid(row=0, column=4)
             
             # 4. Statut
             status_label = ctk.CTkLabel(invoice_frame, text=payment_status.upper(), font=ctk.CTkFont(family="Montserrat", size=10, weight="bold"), text_color=status_color, anchor="e")
-            status_label.grid(row=0, column=3, sticky="e", padx=15, pady=2)
+            status_label.grid(row=0, column=5, sticky="e", padx=15, pady=2)
 
             # 5. Montant
             amount_label = ctk.CTkLabel(invoice_frame, text=f"{row['Montant']:.2f} €", font=ctk.CTkFont(family="Montserrat", size=13, weight="bold"), text_color="#3498db", anchor="e")
-            amount_label.grid(row=0, column=4, sticky="e", padx=(0, 10), pady=2)
+            amount_label.grid(row=0, column=6, sticky="e", padx=(0, 10), pady=2)
+
+            # 6. Actions (Email)
+            email_btn = ctk.CTkButton(invoice_frame, text="✉️", width=30, height=25, fg_color="transparent", text_color=("gray50", "gray70"), hover_color=("gray80", "gray30"), command=lambda d=row_data: self.invoice_actions._prompt_send_email(invoice_data=d))
+            email_btn.grid(row=0, column=7, sticky="e", padx=(0, 5), pady=2)
 
             # --- Effet de survol (Highlight) ---
             row_data = row.to_dict()
@@ -361,7 +383,7 @@ class App(ctk.CTk):
                 frame.configure(fg_color=orig)
 
             # Applique les événements sur le cadre et ses enfants pour gérer correctement la sortie de la souris
-            for widget in [invoice_frame, status_strip, name_label, details_label, amount_label, status_label]:
+            for widget in [invoice_frame, status_strip, name_label, details_label, amount_label, status_label, email_btn, chk]:
                 widget.bind("<Enter>", on_enter)
                 widget.bind("<Leave>", on_leave)
                 widget.bind("<Button-3>", lambda event, data=row_data: self.invoice_actions.show_invoice_context_menu(event, data))

@@ -205,7 +205,7 @@ def save_to_excel(data):
     preferred_order = [
         "ID", "Date", "SequenceID", "Nom", "Prenom", "Adresse", "Attention_de", "Nom_Enfant",
         "Naissance_Enfant", "Attention_de2", "Prenom2", "Nom2", "Membres_Famille", "Prestation", "Date_Seance", "Montant",
-        "Methode_Paiement", "Date_Paiement", "Note"
+        "Methode_Paiement", "Date_Paiement", "Date_Envoi_Email", "Note"
     ]
     
     final_columns = [col for col in preferred_order if col in master_columns]
@@ -217,6 +217,46 @@ def save_to_excel(data):
             if not df_to_write.empty:
                 df_to_write = df_to_write.reindex(columns=final_columns)
             df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
+
+def mark_invoices_as_sent(invoice_list):
+    """Met à jour la date d'envoi d'email pour une liste de factures."""
+    import pandas as pd
+    
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    by_year = {}
+    
+    # Regrouper par année pour minimiser les ouvertures de fichiers
+    for inv in invoice_list:
+        try:
+            d = datetime.strptime(inv['Date'], '%d/%m/%Y')
+            year = d.year
+            if year not in by_year: by_year[year] = []
+            by_year[year].append(inv['ID'])
+        except: pass
+        
+    for year, ids in by_year.items():
+        excel_path = _get_excel_path(year)
+        if not os.path.exists(excel_path): continue
+        
+        try:
+            all_sheets = pd.read_excel(excel_path, sheet_name=None, dtype={'ID': str, 'SequenceID': str})
+            modified = False
+            
+            for sheet_name, df in all_sheets.items():
+                if 'ID' not in df.columns: continue
+                mask = df['ID'].isin(ids)
+                if mask.any():
+                    if 'Date_Envoi_Email' not in df.columns: df['Date_Envoi_Email'] = None
+                    df.loc[mask, 'Date_Envoi_Email'] = today_str
+                    all_sheets[sheet_name] = df
+                    modified = True
+            
+            if modified:
+                with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                    for sheet_name, df in all_sheets.items():
+                        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        except Exception as e:
+            print(f"Erreur mark_invoices_as_sent: {e}")
 
 def get_invoice_path(data, get_folder=False):
     """Construit le chemin du PDF de la facture avec la structure Année/Mois/Jour."""
