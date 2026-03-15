@@ -41,6 +41,14 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
+        
+    import tkinter as tk
+    if issubclass(exc_type, tk.TclError):
+        err_msg = str(exc_value).lower()
+        if "bad window path name" in err_msg and (".!ctktoplevel" in err_msg or "toplevel" in err_msg):
+            # Ignore harmless CustomTkinter bug on rapid window destruction
+            return
+            
     logging.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 sys.excepthook = handle_exception
@@ -139,6 +147,10 @@ class App(ctk.CTk):
 
         # Assure que la configuration des PDF existe
         settings_manager.setup_default_settings()
+        
+        # Lance la migration Excel -> SQLite si nécessaire
+        from .migration import check_and_migrate
+        check_and_migrate()
 
         # --- Frame du Menu Principal ---
         self.menu_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -238,6 +250,11 @@ class App(ctk.CTk):
 
     def _handle_tk_exception(self, exc, val, tb):
         """Gère les exceptions survenues dans les callbacks Tkinter."""
+        err_msg = str(val).lower()
+        if "bad window path name" in err_msg and "ctktoplevel" in err_msg:
+            # Ignore ce bug spécifique de CustomTkinter sur Windows (destruction rapide d'un Toplevel)
+            return
+
         logging.error("Tkinter exception", exc_info=(exc, val, tb))
         messagebox.showerror("Erreur", f"Une erreur est survenue :\n{val}\n\nConsultez log.txt pour plus de détails.")
 
@@ -563,58 +580,90 @@ class App(ctk.CTk):
         """Applique tous les filtres de l'onglet recherche et affiche les résultats."""
         import pandas as pd
         from .data_manager import MONTHS_FR
+        from .db_manager import advanced_search_invoices
 
         year = self.search_year_var.get()
         month = self.search_month_var.get()
         prestation = self.search_prestation_var.get()
         status = self.search_status_var.get()
-        query = self.search_entry.get().lower().strip()
+        query = self.search_entry.get().strip()
 
         self.current_page = 1 # Réinitialise la pagination à la première page
 
-        # 1. Charger les données de base (année ou toutes)
-        year_to_load = year if year != "Toutes" else None
-        df = self._load_data_with_cache(year=year_to_load)
-
-        if df.empty:
-            self._display_invoices_in_frame(pd.DataFrame(), "Aucune facture trouvée")
-            return
-        
         try:
-            results = df.copy()
-
-            # 2. Filtrer par mois (si une année est sélectionnée)
+            month_index = None
             if year != "Toutes" and month != "Tous":
-                month_index = MONTHS_FR.index(month) + 1
-                # S'assure que la colonne Date est au format datetime
-                if 'Date' in results.columns:
-                    results['Date'] = pd.to_datetime(results['Date'], format='%d/%m/%Y', errors='coerce')
-                    results = results[results['Date'].dt.month == month_index]
+                try:
+                    month_index = MONTHS_FR.index(month) + 1
+                except ValueError:
+                    pass
 
-            # 3. Filtrer par type de prestation
-            if prestation != "Toutes":
-                results = results[results['Prestation'] == prestation]
+            # Recherche optimisée directement en SQL
+            results_dict = advanced_search_invoices(
+                year=year,
+                month_index=month_index,
+                prestation=prestation,
+                status=status,
+                query=query
+            )
+            
+            # Conversion en DataFrame pour compatibilité avec l'affichage et l'export
+            df_results = pd.DataFrame(results_dict) if results_dict else pd.DataFrame()
 
-            # 4. Filtrer par statut
-            if status == "Impayées":
-                results = results[results['Methode_Paiement'] == 'Impayé']
-            elif status == "Payées":
-                results = results[results['Methode_Paiement'] != 'Impayé']
-            elif status == "Non-lieu":
-                if 'Date_Seance' in results.columns:
-                    results = results[results['Date_Seance'].astype(str).str.lower() == 'non-lieu']
-
-            # 5. Filtrer par nom/prénom
-            if query:
-                search_str = results['Prenom'].fillna('').astype(str).str.lower() + ' ' + results['Nom'].fillna('').astype(str).str.lower()
-                if 'Nom_Enfant' in results.columns:
-                    search_str += ' ' + results['Nom_Enfant'].fillna('').astype(str).str.lower()
+            if df_results.empty:
+                self._update_search_summary(pd.DataFrame())
+                self._display_invoices_in_frame(pd.DataFrame(), "Aucune facture trouvée")
+            else:
+                self._update_search_summary(df_results)
+                self._display_invoices_in_frame(df_results, "Résultats des filtres")
                 
-                results = results[search_str.str.contains(query, na=False)]
-
-            self._display_invoices_in_frame(results, "Résultats des filtres")
         except Exception as e:
             messagebox.showerror("Erreur de filtrage", f"Une erreur est survenue : {e}")
+
+    def _update_search_summary(self, df):
+        """Met à jour le cadre récapitulatif des revenus dans l'onglet Recherche."""
+        if not hasattr(self, 'search_summary_frame'):
+            return
+            
+        if df.empty:
+            self.search_summary_frame.grid_remove()
+            return
+            
+        self.search_summary_frame.grid()
+        
+        # Filtre les non-lieux qui ne comptent pas dans le CA
+        valid_df = df[df['Methode_Paiement'] != 'Non-lieu'] if 'Methode_Paiement' in df.columns else df
+        
+        if valid_df.empty:
+            self.lbl_summary_total.configure(text="Total: 0 €", text_color=("gray10", "gray90"))
+            self.lbl_summary_details.configure(text="Aucune donnée financière")
+            return
+            
+        total_revenue = valid_df[valid_df['Methode_Paiement'] != 'Impayé']['Montant'].sum()
+        total_unpaid = valid_df[valid_df['Methode_Paiement'] == 'Impayé']['Montant'].sum()
+        
+        # Grouper par méthode de paiement
+        try:
+            grouped = valid_df.groupby('Methode_Paiement')['Montant'].sum()
+            details = []
+            for method, amount in grouped.items():
+                if amount > 0:
+                    details.append(f"{method}: {amount:,.0f}€".replace(',', ' '))
+                    
+            details_str = " | ".join(details)
+            
+            # Formattage global
+            total_text = f"Encaissé: {total_revenue:,.0f} €".replace(',', ' ')
+            if total_unpaid > 0:
+                total_text += f"\nImpayés: {total_unpaid:,.0f} €"
+                self.lbl_summary_total.configure(text=total_text, text_color="#e74c3c")
+            else:
+                self.lbl_summary_total.configure(text=total_text, text_color="#2ecc71")
+                
+            self.lbl_summary_details.configure(text=details_str)
+            
+        except Exception as e:
+            print(f"Erreur de calcul du résumé: {e}")
 
     def _on_main_search_change(self, event=None):
         """Lance la recherche principale avec un délai pour améliorer la réactivité."""

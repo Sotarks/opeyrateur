@@ -211,7 +211,6 @@ class SettingsUI:
         btn_grid = ctk.CTkFrame(parent, fg_color="transparent")
         btn_grid.pack(fill="x", padx=20, pady=5)
         ctk.CTkButton(btn_grid, text="Régénérer PDF Factures", font=self.app.font_button, command=self._regenerate_all_invoice_pdfs, height=40).pack(side="left", fill="x", expand=True, padx=(0, 5))
-        ctk.CTkButton(btn_grid, text="Régénérer Excel Factures", font=self.app.font_button, command=self._regenerate_all_invoices_excel, height=40).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
         ctk.CTkLabel(parent, text="Organisation des fichiers", font=self.app.font_bold, text_color="#3498db").pack(anchor="w", padx=20, pady=(20, 10))
         ctk.CTkButton(parent, text="🗂️ Reclasser les factures (Année > Mois > Jour)", font=self.app.font_button, command=self._reclassify_invoices, height=40).pack(fill="x", padx=20, pady=5)
@@ -270,7 +269,8 @@ class SettingsUI:
                 "frais": config.FRAIS_DIR,
                 "budget": config.BUDGET_DIR,
                 "attestations": config.ATTESTATIONS_DIR,
-                "settings.ini": os.path.join(config.BASE_DIR, "settings.ini")
+                "settings.ini": os.path.join(config.BASE_DIR, "settings.ini"),
+                "data.db": os.path.join(config.BASE_DIR, "data.db")
             }
             default_name = f"Backup_Complet{period_str}_{date_str}"
         elif target == "factures":
@@ -341,25 +341,9 @@ class SettingsUI:
                                 except ValueError:
                                     pass # Pas un dossier date, on continue
 
-                            # 2. Filtre le fichier Excel
-                            excel_filename = ""
-                            if arcname == "factures": excel_filename = f"factures_{selected_year}.xlsx"
-                            elif arcname == "frais": excel_filename = f"frais_{selected_year}.xlsx"
-
-                            if excel_filename:
-                                excel_path = os.path.join(year_path, excel_filename)
-                                if os.path.exists(excel_path):
-                                    try:
-                                        all_sheets = pd.read_excel(excel_path, sheet_name=None)
-                                        if selected_month in all_sheets:
-                                            month_df = all_sheets[selected_month]
-                                            output = BytesIO()
-                                            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                                month_df.to_excel(writer, sheet_name=selected_month, index=False)
-                                            zip_excel_path = os.path.join(arcname, selected_year, excel_filename)
-                                            zipf.writestr(zip_excel_path, output.getvalue())
-                                    except Exception:
-                                        pass # Ignore les erreurs de traitement Excel
+                            # 2. Ignorer les anciens fichiers Excel
+                            # Les données sont maintenant dans data.db
+                            pass
 
             messagebox.showinfo("Succès", f"Sauvegarde créée avec succès :\n{filepath}")
             try: os.startfile(os.path.dirname(filepath))
@@ -729,33 +713,7 @@ class SettingsUI:
              refresh_expenses_list(self.app)
         messagebox.showinfo("Succès", f"{count} frais ont été générés.")
 
-    def _regenerate_all_invoices_excel(self):
-        if not messagebox.askyesno("Confirmation", "Cette opération va lire toutes vos factures et recréer les fichiers Excel.\nContinuer ?"):
-            return
-        from .data_manager import load_all_data, get_available_years, backup_database, save_to_excel
-        import pandas as pd
-        self.app._show_status_message("Regénération Excel en cours...")
-        self.app.update_idletasks()
 
-        try:
-            all_invoices_df = load_all_data()
-            if all_invoices_df.empty:
-                messagebox.showinfo("Information", "Aucune facture à traiter.")
-                return
-            available_years = get_available_years()
-            for year in available_years: backup_database(year)
-            
-            for year in available_years:
-                excel_path = os.path.join(config.FACTURES_DIR, str(year), f"factures_{year}.xlsx")
-                if os.path.exists(excel_path): os.remove(excel_path)
-
-            all_invoices_df = all_invoices_df.where(pd.notnull(all_invoices_df), None)
-            invoices_to_save = all_invoices_df.to_dict('records')
-            for invoice_data in invoices_to_save: save_to_excel(invoice_data)
-
-            messagebox.showinfo("Succès", "Regénération Excel terminée.")
-        except Exception as e:
-            messagebox.showerror("Erreur", f"Erreur durant la regénération :\n{e}")
 
     def _regenerate_all_invoice_pdfs(self):
         if not messagebox.askyesno("Confirmation", "Cette opération va remplacer tous les PDF de factures.\nContinuer ?"):

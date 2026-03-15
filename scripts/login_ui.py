@@ -104,7 +104,9 @@ class LoginUI:
         update_dashboard_views(self.app, data)
         
         if hasattr(self, 'loading_window') and self.loading_window.winfo_exists():
-            self.loading_window.destroy()
+            # Délai pour éviter le crash interne CustomTkinter sur la destruction de toplevels
+            window_to_destroy = self.loading_window
+            self.app.after(50, lambda: window_to_destroy.destroy() if window_to_destroy.winfo_exists() else None)
             
         self.app.check_automatic_expenses()
         self.app.check_unpaid_invoices()

@@ -93,7 +93,12 @@ def create_search_tab(app):
     main_content = ctk.CTkFrame(app.search_tab, corner_radius=0, fg_color="transparent")
     main_content.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
     main_content.grid_columnconfigure(0, weight=1)
-    main_content.grid_rowconfigure(1, weight=1)
+    
+    # Répartition verticale : le frame de résultats (index 2) prend tout l'espace libre
+    main_content.grid_rowconfigure(0, weight=0) # Titre
+    main_content.grid_rowconfigure(1, weight=0) # Résumé / Totaux
+    main_content.grid_rowconfigure(2, weight=1) # Résultats (expand)
+    main_content.grid_rowconfigure(3, weight=0) # Pagination
 
     # Titre et bouton de rafraîchissement
     title_frame = ctk.CTkFrame(main_content, fg_color="transparent")
@@ -108,13 +113,27 @@ def create_search_tab(app):
     app.search_refresh_progress.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0))
     app.search_refresh_progress.grid_remove() # Cachée par défaut
 
+    # --- Cadre des totaux (Résumé des revenus) ---
+    app.search_summary_frame = ctk.CTkFrame(main_content, corner_radius=10, fg_color=("white", "gray20"))
+    app.search_summary_frame.grid(row=1, column=0, sticky="ew", pady=(0, 15))
+    # Ne pas donner de weight vertical au summary frame pour qu'il reste compact
+    app.search_summary_frame.grid_columnconfigure(1, weight=1)
+    app.search_summary_frame.grid_remove() # Masqué par défaut s'il n'y a pas de recherche
+    
+    # Widgets du résumé (seront remplis dynamiquement)
+    app.lbl_summary_total = ctk.CTkLabel(app.search_summary_frame, text="Total: 0 €", font=app.font_large)
+    app.lbl_summary_total.grid(row=0, column=0, pady=10, padx=15, sticky="w")
+    
+    app.lbl_summary_details = ctk.CTkLabel(app.search_summary_frame, text="", font=ctk.CTkFont(size=12))
+    app.lbl_summary_details.grid(row=0, column=1, pady=10, padx=15, sticky="e")
+
     # --- Cadre des résultats ---
     app.results_frame = ctk.CTkScrollableFrame(main_content, label_text="", corner_radius=15, fg_color=("white", "gray20"))
-    app.results_frame.grid(row=1, column=0, sticky="nsew")
+    app.results_frame.grid(row=2, column=0, sticky="nsew")
 
     # --- Pagination ---
     app.pagination_frame = ctk.CTkFrame(main_content, fg_color="transparent", height=50)
-    app.pagination_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+    app.pagination_frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
     app.pagination_frame.grid_columnconfigure((0, 4), weight=1)
 
     app.btn_prev_page = ctk.CTkButton(app.pagination_frame, text="◀", width=40, command=app._prev_page, state="disabled", height=30, fg_color="transparent", border_width=1, text_color=("gray10", "gray90"))

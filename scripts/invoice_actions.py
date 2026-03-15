@@ -244,39 +244,27 @@ class InvoiceActions:
                     return
 
             # Mise à jour classique (même date de création)
-            invoice_date = datetime.strptime(invoice_data.get('Date'), '%d/%m/%Y')
-            year = invoice_date.year
-            month_name = MONTHS_FR[invoice_date.month - 1]
-            excel_path = os.path.join(config.FACTURES_DIR, str(year), f"factures_{year}.xlsx")
-
-            if not os.path.exists(excel_path): return
-            backup_database(year)
-
-            all_sheets = pd.read_excel(excel_path, sheet_name=None, dtype={'ID': str, 'SequenceID': str})
-            sheet_df = all_sheets.get(month_name)
-            
-            idx = sheet_df.index[sheet_df['ID'] == invoice_data['ID']].tolist()[0]
-            sheet_df.loc[idx, 'Methode_Paiement'] = new_status
-            sheet_df.loc[idx, 'Date_Paiement'] = new_payment_date
-            sheet_df.loc[idx, 'Date_Seance'] = new_seance_date
-            if new_child_dob: sheet_df.loc[idx, 'Naissance_Enfant'] = new_child_dob
-            if new_child_name: sheet_df.loc[idx, 'Nom_Enfant'] = new_child_name
-            if new_nom: sheet_df.loc[idx, 'Nom'] = new_nom
-            if new_prenom: sheet_df.loc[idx, 'Prenom'] = new_prenom
+            updated_data = invoice_data.copy()
+            updated_data['Methode_Paiement'] = new_status
+            updated_data['Date_Paiement'] = new_payment_date
+            updated_data['Date_Seance'] = new_seance_date
+            if new_child_dob: updated_data['Naissance_Enfant'] = new_child_dob
+            if new_child_name: updated_data['Nom_Enfant'] = new_child_name
+            if new_nom: updated_data['Nom'] = new_nom
+            if new_prenom: updated_data['Prenom'] = new_prenom
             
             if new_id and new_id != invoice_data['ID']:
-                sheet_df.loc[idx, 'ID'] = new_id
+                updated_data['ID'] = new_id
                 # Mise à jour intelligente du SequenceID si le format est standard (YYYYMMDD-XXXX)
                 if '-' in new_id:
                     parts = new_id.split('-')
                     if len(parts) >= 2 and parts[-1].isdigit():
-                        sheet_df.loc[idx, 'SequenceID'] = parts[-1]
-            
-            all_sheets[month_name] = sheet_df
-            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-                for sheet_name, df in all_sheets.items(): df.to_excel(writer, sheet_name=sheet_name, index=False)
+                        updated_data['SequenceID'] = parts[-1]
+                
+                # Si l'ID a changé, on supprime l'ancienne
+                delete_invoice(invoice_data)
 
-            updated_data = sheet_df.loc[idx].to_dict()
+            save_to_excel(updated_data)
 
             if regen_pdf:
                 self._regenerate_pdf_and_cleanup(updated_data, invoice_data)
@@ -384,7 +372,7 @@ class InvoiceActions:
             dialog.destroy()
             self.app._show_status_message("Envoi de l'email en cours...")
             
-            from . import email_manager
+            import scripts.email_manager as email_manager
             subject = default_subject
             
             def _send_thread():

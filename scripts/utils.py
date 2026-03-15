@@ -38,8 +38,13 @@ class ToolTip:
 
     def hide_tooltip(self, event=None):
         if self.tooltip_window:
-            self.tooltip_window.destroy()
+            window_to_destroy = self.tooltip_window
             self.tooltip_window = None
+            try:
+                # Add a tiny delay to ensure CustomTkinter internal events (like titlebar color setting) finish first
+                self.widget.after(50, lambda: window_to_destroy.destroy() if window_to_destroy.winfo_exists() else None)
+            except Exception:
+                pass
 
 def validate_fec_content(lines):
     """Vérifie la conformité des lignes FEC (18 colonnes, dates, équilibre)."""
