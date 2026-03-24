@@ -283,7 +283,21 @@ class InvoiceActions:
     def _regenerate_pdf_and_cleanup(self, new_data, old_data):
         """Génère le nouveau PDF et supprime l'ancien si le chemin a changé."""
         import pandas as pd
-        clean_data = {k: v for k, v in new_data.items() if pd.notna(v)}
+        clean_data = {}
+        for k, v in new_data.items():
+            if isinstance(v, (list, tuple, dict)):
+                if v:
+                    clean_data[k] = v
+            else:
+                try:
+                    if pd.notna(v):
+                        val_str = str(v).strip()
+                        if val_str.lower() not in ('nan', '<na>', 'nat', ''):
+                            clean_data[k] = v
+                except Exception:
+                    if v:
+                        clean_data[k] = v
+                        
         if 'Membres_Famille' in clean_data and isinstance(clean_data.get('Membres_Famille'), str):
             try: clean_data['Membres_Famille'] = ast.literal_eval(clean_data['Membres_Famille'])
             except: del clean_data['Membres_Famille']
