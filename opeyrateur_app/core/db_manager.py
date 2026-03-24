@@ -56,9 +56,22 @@ def init_db():
             Description TEXT,
             Montant REAL,
             ProofPath TEXT,
-            CompteNum TEXT
+            CompteNum TEXT,
+            Compte_Paiement TEXT
         )
     ''')
+    
+    # Migration pour rajouter le Compte_Paiement sur une base existante
+    try:
+        cursor.execute("ALTER TABLE expenses ADD COLUMN Compte_Paiement TEXT DEFAULT 'Compte Pro'")
+    except sqlite3.OperationalError:
+        pass # La colonne existe déjà
+
+    # Migration pour rajouter l'état de remboursement perso
+    try:
+        cursor.execute("ALTER TABLE expenses ADD COLUMN Est_Rembourse INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass # La colonne existe déjà
     
     # Création d'index pour accélérer les recherches sur les dépenses
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_expense_date ON expenses(Date)')
@@ -402,15 +415,17 @@ def insert_expense(data):
     try:
         cursor.execute('''
             INSERT INTO expenses (
-                ExpenseID, Date, Categorie, Description, Montant, ProofPath, CompteNum
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ExpenseID, Date, Categorie, Description, Montant, ProofPath, CompteNum, Compte_Paiement, Est_Rembourse
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ExpenseID) DO UPDATE SET
                 Date=excluded.Date,
                 Categorie=excluded.Categorie,
                 Description=excluded.Description,
                 Montant=excluded.Montant,
                 ProofPath=excluded.ProofPath,
-                CompteNum=excluded.CompteNum
+                CompteNum=excluded.CompteNum,
+                Compte_Paiement=excluded.Compte_Paiement,
+                Est_Rembourse=excluded.Est_Rembourse
         ''', (
             data.get('ExpenseID'),
             data.get('Date'),
@@ -418,7 +433,9 @@ def insert_expense(data):
             data.get('Description'),
             data.get('Montant'),
             data.get('ProofPath'),
-            data.get('CompteNum')
+            data.get('CompteNum'),
+            data.get('Compte_Paiement', 'Compte Pro'),
+            data.get('Est_Rembourse', 0)
         ))
         conn.commit()
     finally:
@@ -453,4 +470,24 @@ def delete_expense_by_id(expense_id):
     conn.commit()
     conn.close()
     return rows_deleted > 0
+
+def mark_expenses_as_reimbursed(expense_ids):
+    """Marque une liste de dépenses comme remboursées."""
+    if not expense_ids: return
+    conn = get_connection()
+    cursor = conn.cursor()
+    placeholders = ','.join('?' * len(expense_ids))
+    cursor.execute(f"UPDATE expenses SET Est_Rembourse = 1 WHERE ExpenseID IN ({placeholders})", expense_ids)
+    conn.commit()
+    conn.close()
+
+def unmark_expenses_as_reimbursed(expense_ids):
+    """Annule le remboursement d'une liste de dépenses."""
+    if not expense_ids: return
+    conn = get_connection()
+    cursor = conn.cursor()
+    placeholders = ','.join('?' * len(expense_ids))
+    cursor.execute(f"UPDATE expenses SET Est_Rembourse = 0 WHERE ExpenseID IN ({placeholders})", expense_ids)
+    conn.commit()
+    conn.close()
 

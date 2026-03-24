@@ -13,7 +13,7 @@ import ssl
 
 # --- Configuration ---
 # Cette version doit être mise à jour manuellement à chaque nouvelle release.
-APP_VERSION = "1.1.0" 
+APP_VERSION = "1.1.1" 
 GITHUB_REPO = "Sotarks/opeyrateur"
 API_HEADERS = {
     'User-Agent': 'Opeyrateur-App-Updater/1.0',

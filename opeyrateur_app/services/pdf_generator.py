@@ -251,12 +251,13 @@ def generate_expenses_report(title, df_expenses, year_for_filename):
         pdf_instance.set_fill_color(240, 240, 240)
         
         # En-têtes
-        pdf_instance.cell(30, 8, "Date", 1, 0, 'C', fill=True)
-        pdf_instance.cell(40, 8, "Catégorie", 1, 0, 'C', fill=True)
-        pdf_instance.cell(90, 8, "Description", 1, 0, 'C', fill=True)
+        pdf_instance.cell(25, 8, "Date", 1, 0, 'C', fill=True)
+        pdf_instance.cell(35, 8, "Catégorie", 1, 0, 'C', fill=True)
+        pdf_instance.cell(75, 8, "Description", 1, 0, 'C', fill=True)
+        pdf_instance.cell(25, 8, "Payé avec", 1, 0, 'C', fill=True)
         pdf_instance.cell(30, 8, "Montant", 1, 1, 'C', fill=True)
 
-        pdf_instance.set_font("Arial", '', 10)
+        pdf_instance.set_font("Arial", '', 9)
 
     draw_header(pdf)
 
@@ -281,13 +282,16 @@ def generate_expenses_report(title, df_expenses, year_for_filename):
         date = str(row['Date'])
         cat = str(row['Categorie'])
         desc = str(row['Description'])
+        compte = str(row.get('Compte_Paiement', 'Compte Pro'))
+        if not compte or compte == 'nan': compte = 'Compte Pro'
         montant = float(row['Montant'])
         total += montant
 
         # Gestion basique de la hauteur de ligne (description longue)
-        pdf.cell(30, 8, date, 1, 0, 'C')
-        pdf.cell(40, 8, cat[:20], 1, 0, 'L') # Tronque si trop long
-        pdf.cell(90, 8, desc[:50], 1, 0, 'L')
+        pdf.cell(25, 8, date, 1, 0, 'C')
+        pdf.cell(35, 8, cat[:18], 1, 0, 'L') # Tronque si trop long
+        pdf.cell(75, 8, desc[:40], 1, 0, 'L')
+        pdf.cell(25, 8, compte[:12], 1, 0, 'C')
         pdf.cell(30, 8, f"{montant:.2f} EUR", 1, 1, 'R')
 
         row_count += 1

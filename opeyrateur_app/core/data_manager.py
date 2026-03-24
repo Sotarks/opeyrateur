@@ -198,7 +198,7 @@ def save_expense(data):
 def load_expenses(year):
     """Charge les frais pour une année donnée."""
     expenses = db_manager.get_all_expenses(year=str(year))
-    columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath", "CompteNum"]
+    columns = ["ExpenseID", "Date", "Categorie", "Description", "Montant", "ProofPath", "CompteNum", "Compte_Paiement", "Est_Rembourse"]
     if not expenses:
         return pd.DataFrame(columns=columns)
     
@@ -224,6 +224,14 @@ def delete_expense(data):
             pass
             
     return db_manager.delete_expense_by_id(data['ExpenseID'])
+
+def mark_as_reimbursed(expense_ids):
+    """Marque les dépenses ciblées comme remboursées."""
+    db_manager.mark_expenses_as_reimbursed(expense_ids)
+
+def unmark_as_reimbursed(expense_ids):
+    """Annule le remboursement des dépenses ciblées."""
+    db_manager.unmark_expenses_as_reimbursed(expense_ids)
 
 def _guess_category(description):
     """Devine la catégorie d'une dépense en fonction de sa description."""
@@ -298,7 +306,9 @@ def import_expenses_from_csv(file_path):
                     "Description": description,
                     "Montant": montant,
                     "ProofPath": None,
-                    "CompteNum": compte_num
+                    "CompteNum": compte_num,
+                    "Compte_Paiement": "Compte Pro",
+                    "Est_Rembourse": 0
                 }
                 
                 if save_expense(data):

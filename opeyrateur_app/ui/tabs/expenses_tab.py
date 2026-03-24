@@ -64,6 +64,12 @@ def create_expenses_tab(app):
     app.expense_amount = ctk.CTkEntry(sidebar, placeholder_text="0.00", height=35, font=ctk.CTkFont(size=16, weight="bold"))
     app.expense_amount.pack(pady=(0, 15), padx=20, fill="x")
 
+    # Moyen de paiement
+    ctk.CTkLabel(sidebar, text="Payé avec", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
+    app.expense_payment_source = ctk.CTkSegmentedButton(sidebar, values=["Compte Pro", "Carte Perso"], height=30)
+    app.expense_payment_source.pack(pady=(0, 15), padx=20, fill="x")
+    app.expense_payment_source.set("Compte Pro")
+
     # Zone Justificatif (Card style)
     ctk.CTkLabel(sidebar, text="Justificatif", font=app.font_bold).pack(pady=(5, 0), padx=20, anchor="w")
     
@@ -161,19 +167,21 @@ def create_expenses_tab(app):
     export_btn.pack(side="left", padx=5)
 
     # --- Tableau des frais (Treeview) ---
-    columns = ("date", "cat", "desc", "montant", "proof_status", "proof_path", "expense_id")
-    app.expenses_tree = ttk.Treeview(main_content, columns=columns, show="headings", selectmode="browse", displaycolumns=("date", "cat", "desc", "montant", "proof_status"))
+    columns = ("date", "cat", "desc", "montant", "compte_paiement", "proof_status", "proof_path", "expense_id")
+    app.expenses_tree = ttk.Treeview(main_content, columns=columns, show="headings", selectmode="extended", displaycolumns=("date", "cat", "desc", "montant", "compte_paiement", "proof_status"))
     
     app.expenses_tree.heading("date", text="Date", command=lambda: _sort_expenses_by(app, "date"))
     app.expenses_tree.heading("cat", text="Catégorie", command=lambda: _sort_expenses_by(app, "cat"))
     app.expenses_tree.heading("desc", text="Description")
     app.expenses_tree.heading("montant", text="Montant", command=lambda: _sort_expenses_by(app, "montant"))
+    app.expenses_tree.heading("compte_paiement", text="Payé avec")
     app.expenses_tree.heading("proof_status", text="Preuve")
 
     app.expenses_tree.column("date", width=100, anchor="center")
     app.expenses_tree.column("cat", width=150, anchor="w")
-    app.expenses_tree.column("desc", width=300, anchor="w")
+    app.expenses_tree.column("desc", width=250, anchor="w")
     app.expenses_tree.column("montant", width=100, anchor="e")
+    app.expenses_tree.column("compte_paiement", width=100, anchor="center")
     app.expenses_tree.column("proof_status", width=60, anchor="center")
 
     app.expenses_tree.grid(row=1, column=0, sticky="nsew")
@@ -189,6 +197,14 @@ def create_expenses_tab(app):
     app.expenses_context_menu.add_command(label="Ouvrir le justificatif", command=lambda: _open_proof(app))
     app.expenses_context_menu.add_command(label="Ajouter un justificatif", command=lambda: _add_proof_to_selected(app))
     app.expenses_context_menu.add_command(label="Supprimer", command=lambda: _confirm_delete_expense(app))
+    
+    # --- Menu Contextuel Groupé (Multi-sélection) ---
+    app.expenses_bulk_context_menu = tk.Menu(app.expenses_tab, tearoff=0)
+    app.expenses_bulk_context_menu.add_command(label="Passer en Carte Perso", command=lambda: _bulk_change_payment(app, "Carte Perso"))
+    app.expenses_bulk_context_menu.add_command(label="Passer en Compte Pro", command=lambda: _bulk_change_payment(app, "Compte Pro"))
+    app.expenses_bulk_context_menu.add_separator()
+    app.expenses_bulk_context_menu.add_command(label="Supprimer la sélection", command=lambda: _bulk_delete_expenses(app))
+
     app.expenses_tree.bind("<Button-3>", lambda event: _show_context_menu(event, app))
     app.expenses_tree.bind("<Double-1>", lambda event: _on_tree_double_click(app, event))
 
@@ -256,7 +272,8 @@ def _add_expense(app):
             "Categorie": category,
             "Description": app.expense_desc.get(),
             "Montant": montant,
-            "ProofPath": app.current_proof_path
+            "ProofPath": app.current_proof_path,
+            "Compte_Paiement": app.expense_payment_source.get()
         }
         
         if save_expense(data):
@@ -335,7 +352,9 @@ def refresh_expenses_list(app):
             proof_path = row["ProofPath"] if pd.notna(row["ProofPath"]) else ""
             proof_status = "📎" if proof_path else ""
             expense_id = row.get("ExpenseID", "")
-            app.expenses_tree.insert("", "end", values=(row["Date"], row["Categorie"], row["Description"], f"{row['Montant']:.2f} €", proof_status, proof_path, expense_id))
+            compte_paiement = row.get("Compte_Paiement", "Compte Pro")
+            if pd.isna(compte_paiement) or not compte_paiement: compte_paiement = "Compte Pro"
+            app.expenses_tree.insert("", "end", values=(row["Date"], row["Categorie"], row["Description"], f"{row['Montant']:.2f} €", compte_paiement, proof_status, proof_path, expense_id))
 
 def _generate_pdf_report(app):
     from opeyrateur_app.core.data_manager import load_expenses
@@ -398,14 +417,73 @@ def _view_pdf_report(app):
         messagebox.showerror("Erreur", f"Impossible de visualiser le PDF : {e}")
 
 def _show_context_menu(event, app):
-    """Affiche le menu contextuel sur la ligne sélectionnée."""
+    """Affiche le menu contextuel selon s'il y a une ou plusieurs lignes sélectionnées."""
     try:
         item = app.expenses_tree.identify_row(event.y)
         if item:
-            app.expenses_tree.selection_set(item)
-            app.expenses_context_menu.tk_popup(event.x_root, event.y_root)
+            if item not in app.expenses_tree.selection():
+                app.expenses_tree.selection_set(item)
+                
+            if len(app.expenses_tree.selection()) > 1:
+                app.expenses_bulk_context_menu.tk_popup(event.x_root, event.y_root)
+            else:
+                app.expenses_context_menu.tk_popup(event.x_root, event.y_root)
     finally:
         app.expenses_context_menu.grab_release()
+        if hasattr(app, 'expenses_bulk_context_menu'):
+            app.expenses_bulk_context_menu.grab_release()
+
+def _bulk_change_payment(app, source):
+    from opeyrateur_app.core.data_manager import save_expense
+    selected_items = app.expenses_tree.selection()
+    if not selected_items: return
+    
+    for item in selected_items:
+        item_values = app.expenses_tree.item(item, "values")
+        montant_str = item_values[3].replace(' €', '').replace(',', '.')
+        try: montant = float(montant_str)
+        except: montant = 0.0
+            
+        data = {
+            "Date": item_values[0],
+            "Categorie": item_values[1],
+            "Description": item_values[2],
+            "Montant": montant,
+            "ExpenseID": item_values[7],
+            "Compte_Paiement": source,
+            "ProofPath": item_values[6]
+        }
+        save_expense(data)
+        
+    app._show_status_message(f"{len(selected_items)} dépenses assignées à {source}.")
+    refresh_expenses_list(app)
+
+def _bulk_delete_expenses(app):
+    from opeyrateur_app.core.data_manager import delete_expense
+    selected_items = app.expenses_tree.selection()
+    if not selected_items: return
+    
+    if not messagebox.askyesno("Confirmation", f"Voulez-vous vraiment supprimer {len(selected_items)} dépenses ?"):
+        return
+        
+    for item in selected_items:
+        item_values = app.expenses_tree.item(item, "values")
+        montant_str = item_values[3].replace(' €', '').replace(',', '.')
+        try: montant = float(montant_str)
+        except: montant = 0.0
+            
+        data = {
+            "Date": item_values[0] if len(item_values) > 0 else "",
+            "Categorie": item_values[1] if len(item_values) > 1 else "",
+            "Description": item_values[2] if len(item_values) > 2 else "",
+            "Montant": montant,
+            "Compte_Paiement": item_values[4] if len(item_values) > 4 else "Compte Pro",
+            "ExpenseID": item_values[7] if len(item_values) > 7 else None
+        }
+        delete_expense(data)
+        
+    app._show_status_message(f"{len(selected_items)} dépenses supprimées.")
+    refresh_expenses_list(app)
 
 def _open_proof(app):
     """Ouvre le fichier justificatif associé à la dépense."""
@@ -413,7 +491,7 @@ def _open_proof(app):
     if not selected_item: return
     
     item_values = app.expenses_tree.item(selected_item, "values")
-    proof_path = item_values[5] if len(item_values) > 5 else None
+    proof_path = item_values[6] if len(item_values) > 6 else None
     
     if proof_path and os.path.exists(proof_path):
         # Si c'est un PDF, on utilise le visualiseur interne
@@ -437,7 +515,7 @@ def _add_proof_to_selected(app):
         return
     
     item_values = app.expenses_tree.item(selected_item, "values")
-    # item_values: date, cat, desc, montant, proof_status, proof_path, expense_id
+    # item_values: date, cat, desc, montant, compte_paiement, proof_status, proof_path, expense_id
     
     filename = filedialog.askopenfilename(title="Choisir un justificatif", filetypes=[("Images & PDF", "*.png;*.jpg;*.jpeg;*.pdf")])
     if not filename:
@@ -454,7 +532,8 @@ def _add_proof_to_selected(app):
         "Categorie": item_values[1],
         "Description": item_values[2],
         "Montant": montant,
-        "ExpenseID": item_values[6],
+        "ExpenseID": item_values[7],
+        "Compte_Paiement": item_values[4],
         "ProofPath": filename
     }
 
@@ -487,7 +566,8 @@ def _confirm_delete_expense(app):
         "Categorie": item_values[1] if len(item_values) > 1 else "",
         "Description": item_values[2] if len(item_values) > 2 else "",
         "Montant": montant,
-        "ExpenseID": item_values[6] if len(item_values) > 6 else None
+        "Compte_Paiement": item_values[4] if len(item_values) > 4 else "Compte Pro",
+        "ExpenseID": item_values[7] if len(item_values) > 7 else None
     }
     
     if messagebox.askyesno("Confirmation", "Voulez-vous vraiment supprimer cette dépense ?"):
@@ -520,8 +600,11 @@ def _prepare_edit_expense(app):
     app.expense_amount.delete(0, 'end')
     app.expense_amount.insert(0, montant_str)
     
+    payment_source = item_values[4] if len(item_values) > 4 else "Compte Pro"
+    app.expense_payment_source.set(payment_source)
+    
     # Gestion du justificatif
-    proof_path = item_values[5] if len(item_values) > 5 else None
+    proof_path = item_values[6] if len(item_values) > 6 else None
     app.current_proof_path = proof_path if proof_path else None
     
     label_text = os.path.basename(proof_path) if proof_path else "Aucun fichier sélectionné"
@@ -533,7 +616,8 @@ def _prepare_edit_expense(app):
         "Categorie": item_values[1] if len(item_values) > 1 else "",
         "Description": item_values[2] if len(item_values) > 2 else "",
         "Montant": float(montant_str),
-        "ExpenseID": item_values[6] if len(item_values) > 6 else None
+        "Compte_Paiement": payment_source,
+        "ExpenseID": item_values[7] if len(item_values) > 7 else None
     }
     
     # Change le bouton en mode "Modifier"
@@ -560,6 +644,7 @@ def _cancel_edit_expense(app):
     app.expense_date.delete(0, 'end')
     app.expense_date.insert(0, datetime.now().strftime("%d/%m/%Y"))
     app.expense_date.configure(state="readonly")
+    app.expense_payment_source.set("Compte Pro")
     app.proof_label.configure(text="Aucun fichier sélectionné", text_color="gray")
 
     # Réinitialise les boutons

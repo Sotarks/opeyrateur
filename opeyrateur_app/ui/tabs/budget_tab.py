@@ -7,6 +7,14 @@ from opeyrateur_app.core import settings_manager
 
 def create_budget_tab(app):
     """Crée les widgets pour l'onglet 'Budget'."""
+    
+    # Historique Undo
+    app.last_reimbursement_action = getattr(app, 'last_reimbursement_action', None)
+    if not hasattr(app, 'reimbursement_undo_bound'):
+        app.bind("<Control-z>", lambda e: _undo_reimburse(app), add="+")
+        app.bind("<Command-z>", lambda e: _undo_reimburse(app), add="+")
+        app.reimbursement_undo_bound = True
+
     # Configuration : 2 colonnes (Sidebar Contrôles | Contenu Principal)
     app.budget_tab.grid_columnconfigure(0, weight=0, minsize=320) # Sidebar fixe
     app.budget_tab.grid_columnconfigure(1, weight=1) # Contenu extensible
@@ -180,6 +188,34 @@ def create_budget_tab(app):
     app.breakdown_frame = ctk.CTkFrame(main_content, corner_radius=15, fg_color=("white", "gray20"))
     app.breakdown_frame.grid(row=3, column=0, sticky="nsew")
 
+    # --- Section: Frais à Rembourser ---
+    ctk.CTkLabel(main_content, text="Dépenses à Rembourser (Carte Perso)", font=app.font_title, text_color="#e67e22").grid(row=4, column=0, sticky="w", pady=(20, 15))
+
+    app.reimbursement_frame = ctk.CTkFrame(main_content, corner_radius=15, fg_color=("white", "gray20"))
+    app.reimbursement_frame.grid(row=5, column=0, sticky="nsew")
+    
+    app.reimbursement_header = ctk.CTkFrame(app.reimbursement_frame, fg_color="transparent")
+    app.reimbursement_header.pack(fill="x", padx=15, pady=(15, 5))
+    
+    app.reimbursement_total_label = ctk.CTkLabel(app.reimbursement_header, text="Total à rembourser : 0.00 €", font=ctk.CTkFont(size=14, weight="bold"), text_color="#e67e22")
+    app.reimbursement_total_label.pack(side="left")
+
+    ctk.CTkButton(app.reimbursement_header, text="💸 Verser le remboursement", command=lambda: _reimburse_selected(app), fg_color="#27ae60", hover_color="#2ecc71").pack(side="right")
+
+    import tkinter.ttk as ttk
+    columns = ("date", "cat", "desc", "montant", "id")
+    app.reimbursement_tree = ttk.Treeview(app.reimbursement_frame, columns=columns, show="headings", height=6, selectmode="extended", displaycolumns=("date", "cat", "desc", "montant"))
+    app.reimbursement_tree.heading("date", text="Date")
+    app.reimbursement_tree.heading("cat", text="Catégorie")
+    app.reimbursement_tree.heading("desc", text="Description")
+    app.reimbursement_tree.heading("montant", text="Montant")
+    
+    app.reimbursement_tree.column("date", width=100, anchor="center")
+    app.reimbursement_tree.column("cat", width=150, anchor="w")
+    app.reimbursement_tree.column("desc", width=250, anchor="w")
+    app.reimbursement_tree.column("montant", width=100, anchor="e")
+    app.reimbursement_tree.pack(fill="x", padx=15, pady=(0, 15))
+
     # Initialisation de l'affichage
     _update_budget_inputs(app)
 
@@ -311,6 +347,9 @@ def calculate_budget(app):
     
     # --- Mise à jour de l'historique des salaires ---
     _update_salary_history(app, df_exp_stats)
+    
+    # --- Mise à jour des remboursements Perso ---
+    _update_reimbursements(app, df_exp_stats)
 
 def _update_breakdown(app, df):
     """Affiche la répartition du CA par prestation."""
@@ -373,6 +412,101 @@ def _update_salary_history(app, df):
         f.pack(fill="x", pady=2)
         ctk.CTkLabel(f, text=row['Date'], font=ctk.CTkFont(size=11)).pack(side="left")
         ctk.CTkLabel(f, text=f"{row['Montant']:.2f} €", font=ctk.CTkFont(size=11, weight="bold")).pack(side="right")
+
+def _update_reimbursements(app, df):
+    """Affiche les dépenses payées en Carte Perso et non remboursées."""
+    for item in app.reimbursement_tree.get_children():
+        app.reimbursement_tree.delete(item)
+        
+    if df.empty or 'Compte_Paiement' not in df.columns:
+        app.reimbursement_total_label.configure(text="Total à rembourser : 0.00 €")
+        return
+        
+    # Filtre: Carte Perso ET non remboursé
+    if 'Est_Rembourse' not in df.columns:
+        df['Est_Rembourse'] = 0
+        
+    pending = df[(df['Compte_Paiement'] == 'Carte Perso') & (df['Est_Rembourse'] == 0)]
+    
+    total = 0.0
+    for _, row in pending.iterrows():
+        try: montant = float(row['Montant'])
+        except: montant = 0.0
+        total += montant
+        app.reimbursement_tree.insert("", "end", values=(row['Date'], row['Categorie'], row['Description'], f"{montant:.2f} €", row.get('ExpenseID', '')))
+        
+    app.reimbursement_total_label.configure(text=f"Total à rembourser : {total:.2f} €")
+
+def _reimburse_selected(app):
+    from tkinter import messagebox
+    from opeyrateur_app.core.data_manager import mark_as_reimbursed, save_expense
+    from datetime import datetime
+    import uuid
+    
+    selected_items = app.reimbursement_tree.selection()
+    if not selected_items:
+        messagebox.showwarning("Sélection", "Veuillez sélectionner au moins une dépense à rembourser.")
+        return
+        
+    ids = []
+    total_amount = 0.0
+    for item in selected_items:
+        values = app.reimbursement_tree.item(item, "values")
+        if len(values) > 4:
+            ids.append(values[4])
+            montant_str = values[3].replace(' €', '').replace(',', '.')
+            try: total_amount += float(montant_str)
+            except: pass
+            
+    if not ids: return
+    
+    if not messagebox.askyesno("Confirmation", f"Voulez-vous générer un remboursement tracable de {total_amount:.2f} € pour ces {len(ids)} dépense(s) ?\n\nCette somme sera enregistrée dans votre historique de Prélèvements Personnels afin d'apparaître sur le PDF."):
+        return
+        
+    # 1. Génération de la trace comptable
+    generated_id = str(uuid.uuid4())
+    data = {
+        "ExpenseID": generated_id,
+        "Date": datetime.now().strftime("%d/%m/%Y"),
+        "Categorie": "Prélèvement Personnel",
+        "Description": f"Remboursement de frais avancés ({len(ids)} opération{'s' if len(ids)>1 else ''})",
+        "Montant": total_amount,
+        "ProofPath": None,
+        "Compte_Paiement": "Compte Pro",
+        "Est_Rembourse": 0
+    }
+    
+    if save_expense(data):
+        # 2. Marquer comme remboursé
+        mark_as_reimbursed(ids)
+        
+        # 3. Stockage pour Ctrl+Z complet
+        app.last_reimbursement_action = {
+            "reimbursed_ids": ids,
+            "generated_id": generated_id
+        }
+        
+        calculate_budget(app)
+        messagebox.showinfo("Succès", f"Remboursement de {total_amount:.2f} € validé et tracé !\n\nIl apparaît désormais dans l'historique de vos prélèvements. (Ctrl+Z pour l'annuler)")
+
+def _undo_reimburse(app):
+    """Annule la dernière action de remboursement."""
+    action = getattr(app, 'last_reimbursement_action', None)
+    if action:
+        from opeyrateur_app.core.data_manager import unmark_as_reimbursed, delete_expense
+        from tkinter import messagebox
+        
+        # 1. Démarque les dépenses
+        unmark_as_reimbursed(action['reimbursed_ids'])
+        
+        # 2. Supprime la trace de prélèvement
+        delete_expense({"ExpenseID": action['generated_id']})
+        
+        # 3. Vide l'historique undo
+        app.last_reimbursement_action = None
+        
+        calculate_budget(app)
+        messagebox.showinfo("Annulation", "Le remboursement a été annulé avec succès et la trace a été effacée de votre historique.")
 
 def _update_chart(app, df):
     """Affiche un graphique de l'évolution du CA sur l'année."""
