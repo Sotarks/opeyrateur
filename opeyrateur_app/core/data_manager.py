@@ -381,3 +381,28 @@ def delete_agenda_note(note_id, year):
         return True
     except Exception:
         return False
+
+# --- Gestion Paramètres Annuels (Budget) ---
+def load_annual_params(year):
+    """Charge les paramètres annuels saisis manuellement (Cotisations, Impôts)."""
+    os.makedirs(config.BUDGET_DIR, exist_ok=True)
+    filepath = os.path.join(config.BUDGET_DIR, f"annual_params_{year}.json")
+    if not os.path.exists(filepath):
+        return {"cotisations": 0.0, "impots": 0.0}
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {"cotisations": 0.0, "impots": 0.0}
+
+def save_annual_params(year, data):
+    """Sauvegarde les paramètres annuels."""
+    os.makedirs(config.BUDGET_DIR, exist_ok=True)
+    filepath = os.path.join(config.BUDGET_DIR, f"annual_params_{year}.json")
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        return True
+    except Exception as e:
+        print(f"Erreur sauvegarde paramètres annuels: {e}")
+        return False

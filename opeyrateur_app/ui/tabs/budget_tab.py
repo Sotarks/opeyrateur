@@ -175,24 +175,72 @@ def create_budget_tab(app):
     main_content = ctk.CTkScrollableFrame(app.budget_tab, corner_radius=0, fg_color="transparent")
     main_content.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
     main_content.grid_columnconfigure(0, weight=1)
-    main_content.grid_rowconfigure(1, weight=2) # Le graphique prend plus de place
-    main_content.grid_rowconfigure(3, weight=1) # La répartition prend le reste
+    main_content.grid_rowconfigure(3, weight=2) # Le graphique prend plus de place
+    main_content.grid_rowconfigure(5, weight=1) # La répartition prend le reste
 
-    ctk.CTkLabel(main_content, text="Visualisation Graphique", font=app.font_title, text_color="#3498db").grid(row=0, column=0, sticky="w", pady=(0, 15))
+    # --- Section: Bilan Financier Annuel ---
+    ctk.CTkLabel(main_content, text="Bilan Financier Annuel (Année complète)", font=app.font_title, text_color="#8e44ad").grid(row=0, column=0, sticky="w", pady=(0, 15))
+
+    app.annual_balance_frame = ctk.CTkFrame(main_content, corner_radius=15, fg_color=("white", "gray20"))
+    app.annual_balance_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 20))
+    app.annual_balance_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+
+    # Bloc CA Annuel
+    ca_frame = ctk.CTkFrame(app.annual_balance_frame, fg_color="transparent")
+    ca_frame.grid(row=0, column=0, padx=10, pady=15, sticky="ew")
+    ctk.CTkLabel(ca_frame, text="CA Brut Annuel", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack()
+    app.annual_ca_label = ctk.CTkLabel(ca_frame, text="0.00 €", font=ctk.CTkFont(size=20, weight="bold"), text_color="#2ecc71")
+    app.annual_ca_label.pack(pady=(5, 0))
+
+    # Bloc Cotisations
+    cotis_frame = ctk.CTkFrame(app.annual_balance_frame, fg_color="transparent")
+    cotis_frame.grid(row=0, column=1, padx=10, pady=15, sticky="ew")
+    ctk.CTkLabel(cotis_frame, text="Cotisations Sociales", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack()
+    app.annual_cotis_entry = ctk.CTkEntry(cotis_frame, justify="center", width=120)
+    app.annual_cotis_entry.pack(pady=(5, 0))
+    app.annual_cotis_entry.insert(0, "0.00")
+
+    # Bloc Impôts
+    impots_frame = ctk.CTkFrame(app.annual_balance_frame, fg_color="transparent")
+    impots_frame.grid(row=0, column=2, padx=10, pady=15, sticky="ew")
+    ctk.CTkLabel(impots_frame, text="Impôts", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack()
+    app.annual_impots_entry = ctk.CTkEntry(impots_frame, justify="center", width=120)
+    app.annual_impots_entry.pack(pady=(5, 0))
+    app.annual_impots_entry.insert(0, "0.00")
+
+    # Bloc Rémunération
+    remu_frame = ctk.CTkFrame(app.annual_balance_frame, fg_color="transparent")
+    remu_frame.grid(row=0, column=3, padx=10, pady=15, sticky="ew")
+    ctk.CTkLabel(remu_frame, text="Ma Rémunération", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack()
+    app.annual_remu_label = ctk.CTkLabel(remu_frame, text="0.00 €", font=ctk.CTkFont(size=20, weight="bold"), text_color="#3498db")
+    app.annual_remu_label.pack(pady=(5, 0))
+
+    # Bloc Reste
+    reste_frame = ctk.CTkFrame(app.annual_balance_frame, fg_color="transparent")
+    reste_frame.grid(row=0, column=4, padx=10, pady=15, sticky="ew")
+    ctk.CTkLabel(reste_frame, text="Reste / Trésorerie", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack()
+    app.annual_reste_label = ctk.CTkLabel(reste_frame, text="0.00 €", font=ctk.CTkFont(size=24, weight="bold"), text_color="#e67e22")
+    app.annual_reste_label.pack(pady=(5, 0))
+
+    # Binding pour mise à jour
+    app.annual_cotis_entry.bind("<KeyRelease>", lambda e: _update_annual_balance_calc(app))
+    app.annual_impots_entry.bind("<KeyRelease>", lambda e: _update_annual_balance_calc(app))
+
+    ctk.CTkLabel(main_content, text="Visualisation Graphique", font=app.font_title, text_color="#3498db").grid(row=2, column=0, sticky="w", pady=(0, 15))
 
     app.chart_frame = ctk.CTkFrame(main_content, corner_radius=15, fg_color=("white", "gray20"))
-    app.chart_frame.grid(row=1, column=0, sticky="nsew")
+    app.chart_frame.grid(row=3, column=0, sticky="nsew")
 
-    ctk.CTkLabel(main_content, text="Répartition par Prestation", font=app.font_title, text_color="#3498db").grid(row=2, column=0, sticky="w", pady=(20, 15))
+    ctk.CTkLabel(main_content, text="Répartition par Prestation", font=app.font_title, text_color="#3498db").grid(row=4, column=0, sticky="w", pady=(20, 15))
 
     app.breakdown_frame = ctk.CTkFrame(main_content, corner_radius=15, fg_color=("white", "gray20"))
-    app.breakdown_frame.grid(row=3, column=0, sticky="nsew")
+    app.breakdown_frame.grid(row=5, column=0, sticky="nsew")
 
     # --- Section: Frais à Rembourser ---
-    ctk.CTkLabel(main_content, text="Dépenses à Rembourser (Carte Perso)", font=app.font_title, text_color="#e67e22").grid(row=4, column=0, sticky="w", pady=(20, 15))
+    ctk.CTkLabel(main_content, text="Dépenses à Rembourser (Carte Perso)", font=app.font_title, text_color="#e67e22").grid(row=6, column=0, sticky="w", pady=(20, 15))
 
     app.reimbursement_frame = ctk.CTkFrame(main_content, corner_radius=15, fg_color=("white", "gray20"))
-    app.reimbursement_frame.grid(row=5, column=0, sticky="nsew")
+    app.reimbursement_frame.grid(row=7, column=0, sticky="nsew")
     
     app.reimbursement_header = ctk.CTkFrame(app.reimbursement_frame, fg_color="transparent")
     app.reimbursement_header.pack(fill="x", padx=15, pady=(15, 5))
@@ -338,6 +386,32 @@ def calculate_budget(app):
 
     # Sauvegarde les données actuelles pour l'export
     app.current_budget_df = df_stats
+
+    # --- Mise à jour du Bilan Annuel ---
+    total_ca_year = 0.0
+    if not df_year.empty and 'Montant' in df_year.columns:
+        total_ca_year = df_year['Montant'].sum()
+        
+    total_remu_year = 0.0
+    if not df_expenses.empty and 'Montant' in df_expenses.columns:
+        remu_expenses = df_expenses[df_expenses['Categorie'] == 'Prélèvement Personnel']
+        total_remu_year = remu_expenses['Montant'].sum()
+        
+    app.annual_ca_brut = total_ca_year
+    app.annual_remu = total_remu_year
+    
+    app.annual_ca_label.configure(text=f"{total_ca_year:.2f} €")
+    app.annual_remu_label.configure(text=f"{total_remu_year:.2f} €")
+    
+    # Charger les paramètres manuels (Cotisations/Impôts)
+    from opeyrateur_app.core.data_manager import load_annual_params
+    params = load_annual_params(year)
+    app.annual_cotis_entry.delete(0, 'end')
+    app.annual_cotis_entry.insert(0, str(params.get('cotisations', 0.0)))
+    app.annual_impots_entry.delete(0, 'end')
+    app.annual_impots_entry.insert(0, str(params.get('impots', 0.0)))
+    
+    _update_annual_balance_calc(app, save=False)
 
     # --- Mise à jour du graphique (Toujours sur l'année pour voir l'évolution) ---
     _update_chart(app, df_year)
@@ -783,3 +857,25 @@ def _export_salary_history_pdf(app):
         PDFViewer(app, path, download_filename=os.path.basename(path))
     except Exception as e:
         messagebox.showerror("Erreur", f"Impossible de visualiser le PDF : {e}")
+
+def _update_annual_balance_calc(app, save=True):
+    """Met à jour le reste à vivre (Trésorerie) du Bilan Annuel."""
+    from opeyrateur_app.core.data_manager import save_annual_params
+    try:
+        c_str = app.annual_cotis_entry.get().replace(',', '.')
+        i_str = app.annual_impots_entry.get().replace(',', '.')
+        cotis = float(c_str) if c_str else 0.0
+        impots = float(i_str) if i_str else 0.0
+        
+        ca_brut = getattr(app, 'annual_ca_brut', 0.0)
+        remu = getattr(app, 'annual_remu', 0.0)
+        
+        reste = ca_brut - cotis - impots - remu
+        
+        app.annual_reste_label.configure(text=f"{reste:.2f} €", text_color="#2ecc71" if reste >= 0 else "#e74c3c")
+        
+        if save:
+            year = app.budget_year_var.get()
+            save_annual_params(year, {"cotisations": cotis, "impots": impots})
+    except ValueError:
+        pass
